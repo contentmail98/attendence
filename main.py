@@ -13,7 +13,7 @@ import os
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 from fastapi import FastAPI, Request, Response, Depends, HTTPException, status
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -659,6 +659,15 @@ def get_student_attendance_history(
         }
         for log in logs
     ]
+
+
+@app.get("/ping", response_class=PlainTextResponse)
+@app.head("/ping")
+@app.head("/")
+@app.head("/health")
+def ping():
+    """Ultra-lightweight 4-byte ping endpoint for uptime monitors and keep-alive cron jobs."""
+    return "pong"
 
 
 @app.get("/health")
