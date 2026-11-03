@@ -142,6 +142,16 @@ async def super_admin_page():
         return HTMLResponse(f.read())
 
 
+@app.get("/parent", response_class=HTMLResponse)
+@app.get("/parent-app", response_class=HTMLResponse)
+@app.get("/app", response_class=HTMLResponse)
+async def parent_web_app():
+    """Serves the Parent Web App (accessible on any smartphone/desktop browser)."""
+    path = os.path.join(os.path.dirname(__file__), "templates", "parent_app.html")
+    with open(path, "r", encoding="utf-8") as f:
+        return HTMLResponse(f.read())
+
+
 @app.get("/portal/{institute_code}", response_class=HTMLResponse)
 async def institute_portal_page(institute_code: str, db: Session = Depends(get_db)):
     inst = db.query(Institute).filter(Institute.code == institute_code.lower()).first()
