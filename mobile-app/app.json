@@ -1,21 +1,23 @@
 {
   "expo": {
-    "name": "Parent Attendance Tracker",
+    "name": "PrepX Attendance",
     "slug": "parent-attendance-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
+      "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#4338CA"
     },
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#4338CA"
       },
       "usesCleartextTraffic": true
     },
