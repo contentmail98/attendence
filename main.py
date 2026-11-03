@@ -23,8 +23,16 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from database import init_db, get_db, Institute, Student, AttendanceRecord
+from database import init_db, get_db, Institute, Student, AttendanceRecord, IST, get_ist_now
 from notifier import send_expo_push_notification
+
+def format_punch_time(dt: Optional[datetime]) -> Optional[str]:
+    """Formats datetime as ISO-8601 string with Indian Standard Time (+05:30) offset."""
+    if not dt:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=IST).isoformat()
+    return dt.astimezone(IST).isoformat()
 
 # Configure logging
 logging.basicConfig(
@@ -187,7 +195,7 @@ def legacy_recent_punches(limit: int = 15, db: Session = Depends(get_db)):
             "id": r.id,
             "student_id": r.student_id,
             "student_name": f"Student #{r.student_id}",
-            "punch_time": r.punch_time.isoformat(),
+            "punch_time": format_punch_time(r.punch_time),
             "punch_type": r.punch_type,
             "device_name": r.device_name,
         }
@@ -271,7 +279,7 @@ def delete_institute(institute_code: str, db: Session = Depends(get_db)):
 
 @app.get("/api/super-admin/stats")
 def get_super_admin_stats(db: Session = Depends(get_db)):
-    now = datetime.now()
+    now = get_ist_now()
     start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
     return {
         "total_institutes": db.query(Institute).count(),
@@ -335,7 +343,20 @@ async def receive_biometric_event(
             student_id,
         )
 
-        now = datetime.now()
+        # Parse Hikvision terminal timestamp or default to Indian Standard Time (IST)
+        raw_event_time = ace.get("dateTime") or payload.get("dateTime")
+        punch_dt = None
+        if raw_event_time:
+            try:
+                clean_time = str(raw_event_time).replace("Z", "+00:00")
+                parsed = datetime.fromisoformat(clean_time)
+                if parsed.tzinfo is not None:
+                    parsed = parsed.astimezone(IST)
+                punch_dt = parsed.replace(tzinfo=None)
+            except Exception:
+                punch_dt = None
+
+        now = punch_dt if punch_dt else get_ist_now()
         start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
         # Smart Toggle & Debounce within this specific institute
@@ -354,7 +375,7 @@ async def receive_biometric_event(
             diff_seconds = (now - last_record.punch_time).total_seconds()
             if diff_seconds < (DEBOUNCE_MINUTES * 60):
                 logger.warning("Debounce ignored duplicate punch for student %s in %s", student_id, inst.name)
-                return {"status": "success", "processed": false, "punch_type": "DEBOUNCED"}
+                return {"status": "success", "processed": False, "punch_type": "DEBOUNCED"}
 
             punch_type = "EXIT" if last_record.punch_type == "ENTRY" else "ENTRY"
         else:
@@ -548,7 +569,7 @@ def get_institute_recent_punches(
             "id": r[0].id,
             "student_id": r[0].student_id,
             "student_name": r[1] or f"Student #{r[0].student_id}",
-            "punch_time": r[0].punch_time.isoformat(),
+            "punch_time": format_punch_time(r[0].punch_time),
             "punch_type": r[0].punch_type,
             "device_name": r[0].device_name,
         }
@@ -632,7 +653,7 @@ def get_student_attendance_history(
         {
             "id": log.id,
             "student_id": log.student_id,
-            "punch_time": log.punch_time.isoformat() if log.punch_time else None,
+            "punch_time": format_punch_time(log.punch_time),
             "punch_type": log.punch_type,
             "device_name": log.device_name,
         }
@@ -642,7 +663,12 @@ def get_student_attendance_history(
 
 @app.get("/health")
 def health():
-    return {"status": "online", "mode": "multi-tenant", "time": datetime.now().isoformat()}
+    return {
+        "status": "online",
+        "mode": "multi-tenant",
+        "time": format_punch_time(get_ist_now()),
+        "timezone": "Asia/Kolkata (IST +05:30)",
+    }
 
 
 if __name__ == "__main__":

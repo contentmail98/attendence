@@ -1,10 +1,17 @@
 import os
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, create_engine, UniqueConstraint
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from dotenv import load_dotenv
 
 load_dotenv()
+
+IST = ZoneInfo("Asia/Kolkata")
+
+def get_ist_now():
+    """Returns the current date and time in Indian Standard Time (IST)."""
+    return datetime.now(IST).replace(tzinfo=None)
 
 # Environment variable DATABASE_URL takes priority (PostgreSQL on cloud, SQLite locally)
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./attendance.db")
@@ -30,7 +37,7 @@ class Institute(Base):
     contact_email = Column(String, nullable=True)
     address = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=get_ist_now)
 
     students = relationship("Student", back_populates="institute", cascade="all, delete-orphan")
     attendance_records = relationship("AttendanceRecord", back_populates="institute", cascade="all, delete-orphan")
@@ -47,7 +54,7 @@ class Student(Base):
     parent_name = Column(String, nullable=True)
     parent_phone = Column(String, index=True, nullable=False)
     parent_fcm_token = Column(String, nullable=True)  # Device token for push notifications
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=get_ist_now)
 
     # Scoped uniqueness: Student ID must be unique within an institute
     __table_args__ = (UniqueConstraint("institute_id", "student_id", name="uq_institute_student"),)
@@ -61,7 +68,7 @@ class AttendanceRecord(Base):
     id = Column(Integer, primary_key=True, index=True)
     institute_id = Column(Integer, ForeignKey("institutes.id"), index=True, nullable=False)
     student_id = Column(String, index=True, nullable=False)
-    punch_time = Column(DateTime, default=datetime.now, nullable=False)
+    punch_time = Column(DateTime, default=get_ist_now, nullable=False)
     punch_type = Column(String, nullable=False)  # 'ENTRY' or 'EXIT'
     device_name = Column(String, nullable=True)
     notes = Column(String, nullable=True)
