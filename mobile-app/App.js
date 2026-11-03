@@ -26,8 +26,8 @@ Notifications.setNotificationHandler({
   }),
 });
 
-// Default server URL — change this or use the in-app Settings gear ⚙️
-const DEFAULT_SERVER_URL = 'http://192.168.29.73:8000';
+// Default server URL — Production Render URL
+const DEFAULT_SERVER_URL = 'https://attendance-api-iw7z.onrender.com';
 
 // Helper: fetch with timeout (default 10 seconds)
 function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
@@ -368,7 +368,7 @@ export default function App() {
             style={styles.textInputFull}
             value={tempServerUrl}
             onChangeText={setTempServerUrl}
-            placeholder="http://192.168.29.73:8000"
+            placeholder="https://attendance-api-iw7z.onrender.com"
             placeholderTextColor="#94A3B8"
             autoCapitalize="none"
             autoCorrect={false}
