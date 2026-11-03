@@ -402,35 +402,92 @@
       // Update Today's Status
       updateTodayCard(latest);
 
-      // Render Cards
-      list.innerHTML = logs.map(log => {
-        const isEntry = log.punch_type === 'ENTRY';
+      // Group logs by date (Date-wise fragments)
+      const groups = {};
+      logs.forEach(log => {
         const d = new Date(log.punch_time);
-        const timeStr = !isNaN(d.getTime()) ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--';
-        const dateStr = !isNaN(d.getTime()) ? d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+        const dateKey = !isNaN(d.getTime()) ? d.toDateString() : 'Unknown Date';
+        if (!groups[dateKey]) {
+          groups[dateKey] = {
+            dateObj: d,
+            items: []
+          };
+        }
+        groups[dateKey].items.push(log);
+      });
 
-        return `
-          <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 flex items-center gap-3.5 transition hover:shadow-md">
-            <div class="w-12 h-12 rounded-2xl flex-shrink-0 flex items-center justify-center font-black text-xs ${
-              isEntry ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-            }">
-              ${isEntry ? '➔ IN' : '← OUT'}
-            </div>
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center justify-between gap-2">
-                <span class="text-base font-extrabold text-slate-900">${timeStr}</span>
-                <span class="text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${
+      const todayStr = new Date().toDateString();
+      const yesterdayDate = new Date();
+      yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+      const yesterdayStr = yesterdayDate.toDateString();
+
+      // Render Date-wise Fragments
+      list.innerHTML = Object.keys(groups).map(dateKey => {
+        const group = groups[dateKey];
+        const isToday = dateKey === todayStr;
+        const isYesterday = dateKey === yesterdayStr;
+
+        let displayTitle = dateKey;
+        let displaySubtitle = '';
+
+        if (isToday) {
+          displayTitle = 'Today';
+          displaySubtitle = group.dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+        } else if (isYesterday) {
+          displayTitle = 'Yesterday';
+          displaySubtitle = group.dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+        } else if (!isNaN(group.dateObj.getTime())) {
+          displayTitle = group.dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+          displaySubtitle = group.dateObj.getFullYear();
+        }
+
+        const itemsHtml = group.items.map(log => {
+          const isEntry = log.punch_type === 'ENTRY';
+          const d = new Date(log.punch_time);
+          const timeStr = !isNaN(d.getTime()) ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--';
+
+          return `
+            <div class="p-3.5 flex items-center justify-between gap-3 hover:bg-slate-50/70 transition">
+              <div class="flex items-center gap-3 min-w-0">
+                <div class="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center font-black text-xs ${
+                  isEntry ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                }">
+                  ${isEntry ? '➔ IN' : '← OUT'}
+                </div>
+                <div class="min-w-0">
+                  <div class="text-sm font-extrabold text-slate-900">${timeStr}</div>
+                  <div class="text-[11px] text-slate-400 truncate max-w-[170px] mt-0.5">
+                    📍 ${log.device_name || 'Biometric Terminal'}
+                  </div>
+                </div>
+              </div>
+              <div>
+                <span class="text-[10px] font-black uppercase px-2.5 py-1 rounded-md tracking-wider ${
                   isEntry ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
                 }">
                   ${log.punch_type}
                 </span>
               </div>
-              <div class="flex items-center justify-between text-xs text-slate-500 mt-1">
-                <span>${dateStr}</span>
-                <span class="text-[11px] text-slate-400 truncate max-w-[140px]">
-                  📍 ${log.device_name || 'Biometric Terminal'}
-                </span>
+            </div>
+          `;
+        }).join('');
+
+        return `
+          <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden mb-4">
+            <!-- Date Fragment Header -->
+            <div class="bg-slate-50/90 px-4 py-2.5 border-b border-slate-100 flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <i class="fa-regular fa-calendar-days text-indigo-500 text-xs"></i>
+                <span class="text-xs font-bold text-slate-800">${displayTitle}</span>
+                ${displaySubtitle ? `<span class="text-[11px] text-slate-400">• ${displaySubtitle}</span>` : ''}
               </div>
+              <span class="text-[10px] font-semibold text-slate-500 bg-white border border-slate-200/80 px-2 py-0.5 rounded-full shadow-2xs">
+                ${group.items.length} ${group.items.length === 1 ? 'punch' : 'punches'}
+              </span>
+            </div>
+            <!-- Punch Items for this Date -->
+            <div class="divide-y divide-slate-100">
+              ${itemsHtml}
             </div>
           </div>
         `;

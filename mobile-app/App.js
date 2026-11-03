@@ -302,21 +302,44 @@ export default function App() {
 
   const todayLatest = getTodayStatus();
 
-  const renderAttendanceItem = ({ item }) => {
+  const getDateHeader = (item, index) => {
+    if (!item?.punch_time) return null;
+    const d = new Date(item.punch_time);
+    if (isNaN(d.getTime())) return null;
+
+    const prevItem = index > 0 ? attendanceLogs[index - 1] : null;
+    const prevD = prevItem?.punch_time ? new Date(prevItem.punch_time) : null;
+
+    const currentKey = d.toDateString();
+    const prevKey = prevD ? prevD.toDateString() : null;
+
+    if (currentKey === prevKey) return null;
+
+    const todayStr = new Date().toDateString();
+    const yesterdayDate = new Date();
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+    const yesterdayStr = yesterdayDate.toDateString();
+
+    let title = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+    if (currentKey === todayStr) title = 'Today • ' + title;
+    else if (currentKey === yesterdayStr) title = 'Yesterday • ' + title;
+
+    return (
+      <View style={styles.dateHeaderContainer}>
+        <Text style={styles.dateHeaderText}>📅 {title}</Text>
+      </View>
+    );
+  };
+
+  const renderAttendanceItem = ({ item, index }) => {
     if (!item) return null;
     const isEntry = item.punch_type === 'ENTRY';
-    let dateStr = 'Today';
     let timeStr = '--:--';
 
     try {
       if (item.punch_time) {
         const dateObj = new Date(item.punch_time);
         if (!isNaN(dateObj.getTime())) {
-          dateStr = dateObj.toLocaleDateString(undefined, {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-          });
           timeStr = dateObj.toLocaleTimeString(undefined, {
             hour: '2-digit',
             minute: '2-digit',
@@ -328,25 +351,27 @@ export default function App() {
     }
 
     return (
-      <View style={styles.logCard}>
-        <View style={[styles.punchIconContainer, isEntry ? styles.entryBg : styles.exitBg]}>
-          <Text style={[styles.punchIconText, isEntry ? styles.entryColor : styles.exitColor]}>
-            {isEntry ? '➔ In' : '← Out'}
-          </Text>
-        </View>
-
-        <View style={styles.logInfo}>
-          <View style={styles.logRow}>
-            <Text style={styles.logTime}>{timeStr}</Text>
-            <View style={[styles.badge, isEntry ? styles.badgeEntry : styles.badgeExit]}>
-              <Text style={[styles.badgeText, isEntry ? styles.badgeTextEntry : styles.badgeTextExit]}>
-                {item.punch_type}
-              </Text>
-            </View>
+      <View>
+        {getDateHeader(item, index)}
+        <View style={styles.logCard}>
+          <View style={[styles.punchIconContainer, isEntry ? styles.entryBg : styles.exitBg]}>
+            <Text style={[styles.punchIconText, isEntry ? styles.entryColor : styles.exitColor]}>
+              {isEntry ? '➔ In' : '← Out'}
+            </Text>
           </View>
-          <View style={styles.logSubRow}>
-            <Text style={styles.logDate}>{dateStr}</Text>
-            <Text style={styles.deviceLabel}>📍 {item.device_name || 'Biometric Gate'}</Text>
+
+          <View style={styles.logInfo}>
+            <View style={styles.logRow}>
+              <Text style={styles.logTime}>{timeStr}</Text>
+              <View style={[styles.badge, isEntry ? styles.badgeEntry : styles.badgeExit]}>
+                <Text style={[styles.badgeText, isEntry ? styles.badgeTextEntry : styles.badgeTextExit]}>
+                  {item.punch_type}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.logSubRow}>
+              <Text style={styles.deviceLabel}>📍 {item.device_name || 'Biometric Gate'}</Text>
+            </View>
           </View>
         </View>
       </View>
@@ -1023,6 +1048,20 @@ const styles = StyleSheet.create({
   deviceLabel: {
     fontSize: 11,
     color: '#94A3B8',
+  },
+  dateHeaderContainer: {
+    backgroundColor: '#EEF2FF',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginTop: 10,
+    marginBottom: 8,
+    alignSelf: 'flex-start',
+  },
+  dateHeaderText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#4338CA',
   },
   emptyState: {
     alignItems: 'center',
