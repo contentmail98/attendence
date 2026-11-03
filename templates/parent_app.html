@@ -153,8 +153,9 @@
           <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
           Live Sync Active
         </span>
-        <button onclick="refreshData()" class="text-indigo-600 hover:text-indigo-700 font-bold flex items-center gap-1">
-          <i class="fa-solid fa-rotate text-[10px]"></i> Refresh
+        <button id="refreshBtn" onclick="refreshData()" class="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 active:scale-95 text-indigo-700 font-bold text-xs flex items-center gap-1.5 border border-indigo-200/60 shadow-2xs transition-all">
+          <i id="refreshIcon" class="fa-solid fa-arrows-rotate text-[11px] transition-transform"></i>
+          <span id="refreshText">Refresh</span>
         </button>
       </div>
 
@@ -372,8 +373,36 @@
       }
     }
 
-    function refreshData() {
-      fetchAttendance();
+    async function refreshData() {
+      const btn = document.getElementById('refreshBtn');
+      const icon = document.getElementById('refreshIcon');
+      const text = document.getElementById('refreshText');
+      if (!btn || btn.disabled) return;
+
+      btn.disabled = true;
+      icon.className = 'fa-solid fa-arrows-rotate text-[11px] fa-spin';
+      text.textContent = 'Syncing...';
+
+      const start = Date.now();
+      await fetchAttendance();
+
+      // Ensure spin is smoothly visible for at least 450ms
+      const elapsed = Date.now() - start;
+      if (elapsed < 450) {
+        await new Promise(r => setTimeout(r, 450 - elapsed));
+      }
+
+      icon.className = 'fa-solid fa-check text-[11px] text-emerald-600';
+      text.textContent = 'Updated!';
+      btn.className = 'px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 font-bold text-xs flex items-center gap-1.5 border border-emerald-200 transition-all';
+
+      setTimeout(() => {
+        if (!icon || !btn) return;
+        icon.className = 'fa-solid fa-arrows-rotate text-[11px] transition-transform';
+        text.textContent = 'Refresh';
+        btn.className = 'px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 active:scale-95 text-indigo-700 font-bold text-xs flex items-center gap-1.5 border border-indigo-200/60 shadow-2xs transition-all';
+        btn.disabled = false;
+      }, 1000);
     }
 
     function renderAttendance(logs) {
