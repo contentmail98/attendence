@@ -14,6 +14,7 @@ import {
   RefreshControl,
   ScrollView,
   Modal,
+  Linking,
 } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
@@ -461,8 +462,12 @@ export default function App() {
               <View style={styles.logoCircle}>
                 <Text style={styles.logoIcon}>🏢</Text>
               </View>
-              <Text style={styles.heroTitle}>Student Center</Text>
-              <Text style={styles.heroSubtitle}>Multi-Institute Parent Attendance Portal</Text>
+              <Text style={styles.heroTitle}>Student Attendance Tracker</Text>
+              <TouchableOpacity onPress={() => Linking.openURL('https://www.tiastech.in')} activeOpacity={0.8}>
+                <Text style={styles.heroSubtitle}>
+                  Designed and Developed by <Text style={{ fontWeight: '800', textDecorationLine: 'underline', color: '#FFFFFF' }}>TIAS</Text>
+                </Text>
+              </TouchableOpacity>
             </View>
 
             <View style={styles.loginCard}>

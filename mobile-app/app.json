@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "PrepX Attendance",
-    "slug": "parent-attendance-app",
+    "name": "Student Attendance Tracker",
+    "slug": "student-attendance-tracker",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
