@@ -503,7 +503,7 @@ export default function App() {
                 <Text style={styles.fieldLabel}>INSTITUTE CODE</Text>
                 <TextInput
                   style={[styles.textInputFull, { textTransform: 'lowercase', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }]}
-                  placeholder="e.g. apex or allen"
+                  placeholder="e.g. apex"
                   placeholderTextColor="#94A3B8"
                   autoCapitalize="none"
                   value={instituteCode}
@@ -518,7 +518,7 @@ export default function App() {
                   <Text style={styles.countryCode}>🇮🇳 +91</Text>
                   <TextInput
                     style={styles.textInput}
-                    placeholder="9876543210"
+                    placeholder="987654321"
                     placeholderTextColor="#94A3B8"
                     keyboardType="phone-pad"
                     maxLength={10}
