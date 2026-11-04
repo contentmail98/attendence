@@ -20,7 +20,8 @@
         "backgroundColor": "#4338CA"
       },
       "usesCleartextTraffic": true,
-      "package": "com.arpitjainofficialsteam.studentattendancetracker"
+      "package": "com.arpitjainofficialsteam.studentattendancetracker",
+      "googleServicesFile": "./google-services.json"
     },
     "plugins": [
       "expo-status-bar",

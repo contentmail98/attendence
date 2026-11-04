@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "233766608697",
+    "project_id": "attendancetracker-99b59",
+    "storage_bucket": "attendancetracker-99b59.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:233766608697:android:ea8131af86dc7d4b4892e8",
+        "android_client_info": {
+          "package_name": "com.arpitjainofficialsteam.studentattendancetracker"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCE0H9A78gF6KnR_vLf5AYKexpuxf8FxxI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
