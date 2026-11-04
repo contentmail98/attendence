@@ -62,7 +62,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-DEBOUNCE_MINUTES = float(os.getenv("DEBOUNCE_MINUTES", "5.0"))
+DEBOUNCE_MINUTES = float(os.getenv("DEBOUNCE_MINUTES", "5.0"))  # 5 minutes debounce duration for rapid/duplicate punches
 
 
 # ---------------------------------------------------------

@@ -31,6 +31,9 @@ def send_expo_push_notification(
         "sound": "default",
         "title": title,
         "body": body,
+        "channelId": "attendance-alerts",
+        "priority": "high",
+        "_displayInForeground": True,
         "data": data or {},
     }
 

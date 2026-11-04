@@ -54,7 +54,7 @@
                 type="text"
                 id="instituteCodeInput"
                 required
-                placeholder="e.g. prepx, apex"
+                placeholder="Enter Institute Code"
                 class="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:bg-white lowercase font-mono transition"
               />
             </div>
@@ -258,7 +258,7 @@
 
     // Auto-restore session on page load
     window.addEventListener('DOMContentLoaded', () => {
-      const savedCode = localStorage.getItem('parent_portal_code') || 'prepx';
+      const savedCode = localStorage.getItem('parent_portal_code') || '';
       const savedPhone = localStorage.getItem('parent_portal_phone') || '';
       
       document.getElementById('instituteCodeInput').value = savedCode;

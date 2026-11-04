@@ -24,6 +24,7 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
+    priority: Notifications.AndroidNotificationPriority.MAX,
   }),
 });
 
@@ -56,7 +57,7 @@ function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
 }
 
 export default function App() {
-  const [instituteCode, setInstituteCode] = useState('prepx');
+  const [instituteCode, setInstituteCode] = useState('');
   const [phone, setPhone] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [students, setStudents] = useState([]);
@@ -95,18 +96,20 @@ export default function App() {
             lastKnownPunchId = latest.id;
             setAttendanceLogs(logs);
 
-            // Pop OS system banner with chime
+            // Pop OS system banner with loud chime & vibration
             try {
               const isEntry = latest.punch_type === 'ENTRY';
-              Vibration.vibrate([0, 200, 100, 200]);
+              Vibration.vibrate([0, 500, 200, 500]);
               await Notifications.scheduleNotificationAsync({
                 content: {
                   title: isEntry ? '🏫 Student Check-In' : '👋 Student Check-Out',
                   body: isEntry
                     ? `${selectedStudent.name} entered ${selectedStudent.institute_name || 'Center'}.`
                     : `${selectedStudent.name} has left the center.`,
-                  sound: true,
-                  vibrate: [0, 250, 250, 250],
+                  sound: 'default',
+                  channelId: 'attendance-alerts',
+                  priority: Notifications.AndroidNotificationPriority.MAX,
+                  vibrate: [0, 500, 250, 500],
                 },
                 trigger: null,
               });
@@ -146,16 +149,29 @@ export default function App() {
 
       if (Platform.OS === 'android') {
         try {
-          await Notifications.setNotificationChannelAsync('default', {
-            name: 'Attendance Alerts',
+          // Loud attendance alerts channel with Max importance
+          await Notifications.setNotificationChannelAsync('attendance-alerts', {
+            name: 'Loud Attendance Alerts',
             importance: Notifications.AndroidImportance.MAX,
-            vibrationPattern: [0, 250, 250, 250],
-            lightColor: '#4F46E5',
+            sound: 'default',
+            vibrationPattern: [0, 500, 250, 500, 250, 500],
+            lightColor: '#4338CA',
             enableLights: true,
             enableVibrate: true,
+            showBadge: true,
+            lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+            bypassDnd: false,
+          });
+          await Notifications.setNotificationChannelAsync('default', {
+            name: 'Attendance Notifications',
+            importance: Notifications.AndroidImportance.MAX,
+            sound: 'default',
+            vibrationPattern: [0, 500, 250, 500],
+            enableVibrate: true,
+            showBadge: true,
           });
         } catch (channelErr) {
-          console.log('Channel skipped in Expo Go');
+          console.log('Channel skipped or error in Expo:', channelErr);
         }
       }
     } catch (e) {
@@ -170,7 +186,7 @@ export default function App() {
     const cleanPhone = phone.trim();
 
     if (!cleanCode) {
-      Alert.alert('Required', 'Please enter your Coaching Institute Code (e.g. prepx).');
+      Alert.alert('Required', 'Please enter your Coaching Institute Code.');
       return;
     }
     if (!cleanPhone) {
@@ -257,19 +273,21 @@ export default function App() {
   // Test Sound Feature on Working Dashboard Page
   const handleTestSound = async () => {
     try {
-      Vibration.vibrate([0, 150, 100, 150]);
+      Vibration.vibrate([0, 500, 200, 500, 200, 500]);
       await Notifications.scheduleNotificationAsync({
         content: {
-          title: '🔔 Sound Alert Test',
-          body: 'Attendance alert chime and vibration are working perfectly!',
-          sound: true,
-          vibrate: [0, 250, 250, 250],
+          title: '🔔 Loud Attendance Alert Test',
+          body: 'Attendance alert chime, heads-up banner, and vibration are active!',
+          sound: 'default',
+          channelId: 'attendance-alerts',
+          priority: Notifications.AndroidNotificationPriority.MAX,
+          vibrate: [0, 500, 250, 500],
         },
         trigger: null,
       });
       Alert.alert(
-        '🔊 Sound Test Triggered',
-        'Your phone notification sound and vibration have been triggered! You will hear this whenever attendance is recorded.'
+        '🔊 Loud Alert Triggered',
+        'Your phone notification bar received a maximum-volume alert chime and vibration! You will hear this loud alert whenever attendance is recorded.'
       );
     } catch (err) {
       console.log('Sound test error:', err);
@@ -396,7 +414,7 @@ export default function App() {
                 <Text style={styles.fieldLabel}>INSTITUTE CODE</Text>
                 <TextInput
                   style={[styles.textInputFull, { textTransform: 'lowercase', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }]}
-                  placeholder="e.g. prepx"
+                  placeholder="Enter Institute Code"
                   placeholderTextColor="#94A3B8"
                   autoCapitalize="none"
                   value={instituteCode}
@@ -411,7 +429,7 @@ export default function App() {
                   <Text style={styles.countryCode}>🇮🇳 +91</Text>
                   <TextInput
                     style={styles.textInput}
-                    placeholder="987654321"
+                    placeholder="9876543210"
                     placeholderTextColor="#94A3B8"
                     keyboardType="phone-pad"
                     maxLength={10}
@@ -507,21 +525,63 @@ export default function App() {
             </ScrollView>
           )}
 
-          {/* Today Status Banner */}
-          <View style={styles.statusBanner}>
-            <View style={styles.statusLeft}>
-              <Text style={styles.statusTitle}>Today's Status</Text>
-              {todayLatest ? (
-                <Text style={styles.statusValue}>
-                  {todayLatest.punch_type === 'ENTRY' ? '🟢 Currently IN' : '🔴 Checked OUT'} at{' '}
-                  {new Date(todayLatest.punch_time).toLocaleTimeString(undefined, {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
-                </Text>
+          {/* Live Status Bar with Sync Indicator and Refresh Button */}
+          <View style={styles.liveStatusBar}>
+            <View style={styles.liveIndicatorRow}>
+              <View style={styles.livePulseDot} />
+              <Text style={styles.liveIndicatorText}>LIVE SYNC ACTIVE</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.refreshBtn}
+              onPress={onRefresh}
+              disabled={refreshing}
+              activeOpacity={0.7}
+            >
+              {refreshing ? (
+                <ActivityIndicator size="small" color="#4F46E5" style={{ marginRight: 4 }} />
               ) : (
-                <Text style={styles.statusValue}>⚪ No activity today</Text>
+                <Text style={styles.refreshIcon}>🔄</Text>
               )}
+              <Text style={styles.refreshBtnText}>{refreshing ? 'Syncing...' : 'Refresh'}</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Today's Status Card */}
+          <View style={styles.todayCard}>
+            <View style={styles.todayCardContent}>
+              <Text style={styles.todayCardLabel}>TODAY'S STATUS</Text>
+              <View style={styles.todayStatusRow}>
+                <View
+                  style={[
+                    styles.statusDot,
+                    todayLatest
+                      ? todayLatest.punch_type === 'ENTRY'
+                        ? styles.dotGreen
+                        : styles.dotRed
+                      : styles.dotGray,
+                  ]}
+                />
+                <Text style={styles.todayStatusText}>
+                  {todayLatest
+                    ? todayLatest.punch_type === 'ENTRY'
+                      ? 'Currently IN'
+                      : 'Checked OUT'
+                    : 'No Activity Today'}
+                </Text>
+              </View>
+              <Text style={styles.todaySubText}>
+                {todayLatest
+                  ? `Last punch at ${new Date(todayLatest.punch_time).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })} • ${todayLatest.device_name || 'Biometric Gate'}`
+                  : 'Waiting for biometric gate scan'}
+              </Text>
+            </View>
+            <View style={styles.todayBadge}>
+              <Text style={styles.todayBadgeIcon}>
+                {todayLatest ? (todayLatest.punch_type === 'ENTRY' ? '🏫' : '👋') : '⏳'}
+              </Text>
             </View>
           </View>
 
@@ -765,30 +825,119 @@ const styles = StyleSheet.create({
     color: '#3730A3',
     fontWeight: '700',
   },
-  statusBanner: {
+  liveStatusBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    marginTop: 14,
+    marginBottom: 4,
+  },
+  liveIndicatorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  livePulseDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10B981',
+  },
+  liveIndicatorText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#64748B',
+    letterSpacing: 0.6,
+  },
+  refreshBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EEF2FF',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+  },
+  refreshIcon: {
+    fontSize: 12,
+    marginRight: 4,
+  },
+  refreshBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#4F46E5',
+  },
+  todayCard: {
     backgroundColor: '#FFFFFF',
     marginHorizontal: 16,
-    marginTop: 14,
+    marginTop: 8,
+    marginBottom: 6,
     padding: 16,
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  statusLeft: {
+  todayCardContent: {
     flex: 1,
+    paddingRight: 10,
   },
-  statusTitle: {
+  todayCardLabel: {
     fontSize: 11,
     fontWeight: '700',
+    color: '#94A3B8',
+    letterSpacing: 0.6,
     textTransform: 'uppercase',
-    color: '#64748B',
-    letterSpacing: 0.5,
   },
-  statusValue: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#1E293B',
+  todayStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    gap: 6,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  dotGreen: {
+    backgroundColor: '#10B981',
+  },
+  dotRed: {
+    backgroundColor: '#EF4444',
+  },
+  dotGray: {
+    backgroundColor: '#94A3B8',
+  },
+  todayStatusText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  todaySubText: {
+    fontSize: 12,
+    color: '#64748B',
     marginTop: 3,
+  },
+  todayBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  todayBadgeIcon: {
+    fontSize: 22,
   },
   historyContainer: {
     flex: 1,
