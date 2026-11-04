@@ -411,7 +411,7 @@ export default function App() {
                   <Text style={styles.countryCode}>🇮🇳 +91</Text>
                   <TextInput
                     style={styles.textInput}
-                    placeholder="9876543210"
+                    placeholder="987654321"
                     placeholderTextColor="#94A3B8"
                     keyboardType="phone-pad"
                     maxLength={10}
