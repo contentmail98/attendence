@@ -23,7 +23,14 @@
       "package": "com.arpitjainofficialsteam.studentattendancetracker"
     },
     "plugins": [
-      "expo-status-bar"
+      "expo-status-bar",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#4338CA"
+        }
+      ]
     ],
     "extra": {
       "eas": {

@@ -18,6 +18,19 @@ import {
 } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import Constants from 'expo-constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  AcademyEmblem,
+  ChimeIcon,
+  ExitDoorIcon,
+  SyncCycleIcon,
+  PunchDirectionIcon,
+  ScannerTargetIcon,
+  CalendarBadgeIcon,
+  StatusCrest,
+  EmptyAttendanceGraphic,
+} from './components/CustomIcons';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -60,6 +73,7 @@ export default function App() {
   const [instituteCode, setInstituteCode] = useState('');
   const [phone, setPhone] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isRestoringSession, setIsRestoringSession] = useState(true);
   const [students, setStudents] = useState([]);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [attendanceLogs, setAttendanceLogs] = useState([]);
@@ -67,13 +81,84 @@ export default function App() {
   const [refreshing, setRefreshing] = useState(false);
   const [deviceToken, setDeviceToken] = useState(null);
 
+  // Sync token to server whenever logged in and token is available
+  const syncPushTokenToServer = useCallback(async (tokenToSync, instCode, parentPhone) => {
+    if (!tokenToSync || !instCode || !parentPhone) return;
+    try {
+      const res = await fetch(`${SERVER_URL}/api/parents/register-token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          institute_code: instCode.trim().toLowerCase(),
+          parent_phone: parentPhone.trim(),
+          expo_push_token: tokenToSync,
+        }),
+      });
+      const data = await res.json();
+      console.log('Push token synced to server:', data);
+    } catch (e) {
+      console.log('Push token sync error:', e);
+    }
+  }, []);
+
+  // Restore persistent login session on app launch
+  useEffect(() => {
+    const restoreSession = async () => {
+      try {
+        const savedSession = await AsyncStorage.getItem('@parent_session');
+        if (savedSession) {
+          const { instituteCode: savedCode, phone: savedPhone, selectedStudentId } = JSON.parse(savedSession);
+          if (savedCode && savedPhone) {
+            setInstituteCode(savedCode);
+            setPhone(savedPhone);
+
+            const res = await fetchWithTimeout(
+              `${SERVER_URL}/api/institutes/${savedCode.trim().toLowerCase()}/parents/${savedPhone.trim()}/students`,
+              {},
+              8000
+            );
+            if (res.ok) {
+              const data = await res.json();
+              if (Array.isArray(data) && data.length > 0) {
+                setStudents(data);
+                const matched = selectedStudentId
+                  ? data.find((s) => s.student_id === selectedStudentId)
+                  : data[0];
+                const active = matched || data[0];
+                setSelectedStudent(active);
+                setIsLoggedIn(true);
+                fetchAttendance(active.student_id, savedCode);
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.log('Session restore error:', err);
+      } finally {
+        setIsRestoringSession(false);
+      }
+    };
+
+    restoreSession();
+  }, []);
+
+  // Initialize push notifications
   useEffect(() => {
     registerForPushNotificationsAsync().then((token) => {
-      if (token) setDeviceToken(token);
+      if (token) {
+        setDeviceToken(token);
+      }
     });
   }, []);
 
-  // Poll for live biometric updates
+  // Keep server updated with push token when session is active
+  useEffect(() => {
+    if (isLoggedIn && deviceToken && instituteCode && phone) {
+      syncPushTokenToServer(deviceToken, instituteCode, phone);
+    }
+  }, [isLoggedIn, deviceToken, instituteCode, phone, syncPushTokenToServer]);
+
+  // Poll for live biometric updates when app is open
   useEffect(() => {
     if (!isLoggedIn || !selectedStudent) return;
 
@@ -102,7 +187,7 @@ export default function App() {
               Vibration.vibrate([0, 500, 200, 500]);
               await Notifications.scheduleNotificationAsync({
                 content: {
-                  title: isEntry ? '🏫 Student Check-In' : '👋 Student Check-Out',
+                  title: isEntry ? 'Student Check-In Verified' : 'Student Check-Out Verified',
                   body: isEntry
                     ? `${selectedStudent.name} entered ${selectedStudent.institute_name || 'Center'}.`
                     : `${selectedStudent.name} has left the center.`,
@@ -128,8 +213,36 @@ export default function App() {
 
   async function registerForPushNotificationsAsync() {
     let token = null;
-    try {
-      if (Device.isDevice) {
+
+    if (Platform.OS === 'android') {
+      try {
+        await Notifications.setNotificationChannelAsync('attendance-alerts', {
+          name: 'Loud Attendance Alerts',
+          importance: Notifications.AndroidImportance.MAX,
+          sound: 'default',
+          vibrationPattern: [0, 500, 250, 500, 250, 500],
+          lightColor: '#4338CA',
+          enableLights: true,
+          enableVibrate: true,
+          showBadge: true,
+          lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+          bypassDnd: false,
+        });
+        await Notifications.setNotificationChannelAsync('default', {
+          name: 'Attendance Notifications',
+          importance: Notifications.AndroidImportance.MAX,
+          sound: 'default',
+          vibrationPattern: [0, 500, 250, 500],
+          enableVibrate: true,
+          showBadge: true,
+        });
+      } catch (channelErr) {
+        console.log('Channel setup error:', channelErr);
+      }
+    }
+
+    if (Device.isDevice) {
+      try {
         const { status: existingStatus } = await Notifications.getPermissionsAsync();
         let finalStatus = existingStatus;
         if (existingStatus !== 'granted') {
@@ -137,46 +250,38 @@ export default function App() {
           finalStatus = status;
         }
 
-        try {
-          const expoTokenData = await Notifications.getExpoPushTokenAsync();
-          token = expoTokenData?.data;
-        } catch {
-          token = `DeviceToken-${Device.osName || 'Mobile'}-${Date.now()}`;
+        if (finalStatus !== 'granted') {
+          console.warn('Push notification permission was not granted by user.');
+          return null;
         }
-      } else {
-        token = `SimulatorToken-${Date.now()}`;
-      }
 
-      if (Platform.OS === 'android') {
+        const projectId =
+          Constants?.expoConfig?.extra?.eas?.projectId ??
+          Constants?.easConfig?.projectId ??
+          'd7b8e82d-8623-49d0-ad6c-41d6df76473f';
+
         try {
-          // Loud attendance alerts channel with Max importance
-          await Notifications.setNotificationChannelAsync('attendance-alerts', {
-            name: 'Loud Attendance Alerts',
-            importance: Notifications.AndroidImportance.MAX,
-            sound: 'default',
-            vibrationPattern: [0, 500, 250, 500, 250, 500],
-            lightColor: '#4338CA',
-            enableLights: true,
-            enableVibrate: true,
-            showBadge: true,
-            lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-            bypassDnd: false,
+          const expoTokenData = await Notifications.getExpoPushTokenAsync({
+            projectId: projectId,
           });
-          await Notifications.setNotificationChannelAsync('default', {
-            name: 'Attendance Notifications',
-            importance: Notifications.AndroidImportance.MAX,
-            sound: 'default',
-            vibrationPattern: [0, 500, 250, 500],
-            enableVibrate: true,
-            showBadge: true,
-          });
-        } catch (channelErr) {
-          console.log('Channel skipped or error in Expo:', channelErr);
+          token = expoTokenData?.data;
+          console.log('Successfully acquired Expo Push Token:', token);
+        } catch (pushErr) {
+          console.error('Failed to get Expo push token with projectId:', pushErr);
+          try {
+            const fallbackToken = await Notifications.getExpoPushTokenAsync();
+            token = fallbackToken?.data;
+          } catch (fbErr) {
+            console.error('Fallback token acquisition error:', fbErr);
+          }
         }
+      } catch (deviceErr) {
+        console.error('Error during push registration:', deviceErr);
       }
-    } catch (e) {
-      token = `Device-${Platform.OS}-${Date.now()}`;
+    } else {
+      console.log('Must use a physical device for push notifications');
     }
+
     return token;
   }
 
@@ -224,20 +329,23 @@ export default function App() {
       setSelectedStudent(student);
       setIsLoggedIn(true);
 
-      // Register device token on server (non-blocking)
-      const pushTokenToSend = deviceToken || `ActiveApp-${cleanPhone}`;
-      fetch(`${SERVER_URL}/api/parents/register-token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          institute_code: cleanCode,
-          parent_phone: cleanPhone,
-          expo_push_token: pushTokenToSend,
-        }),
-      }).catch((e) => console.log('Token sync error:', e));
+      // Save persistent session
+      await AsyncStorage.setItem(
+        '@parent_session',
+        JSON.stringify({
+          instituteCode: cleanCode,
+          phone: cleanPhone,
+          selectedStudentId: student.student_id,
+        })
+      );
+
+      // Register device token on server immediately if ready
+      if (deviceToken) {
+        syncPushTokenToServer(deviceToken, cleanCode, cleanPhone);
+      }
 
       // Fetch attendance records
-      fetchAttendance(student.student_id);
+      fetchAttendance(student.student_id, cleanCode);
     } catch (err) {
       console.log('Login error:', err.name, err.message);
       Alert.alert('Login Failed', err.message || 'Cannot connect to server. Please try again.');
@@ -246,10 +354,25 @@ export default function App() {
     }
   };
 
-  const fetchAttendance = async (studentId) => {
+  const handleLogout = async () => {
+    try {
+      await AsyncStorage.removeItem('@parent_session');
+    } catch (e) {
+      console.log('Error clearing session:', e);
+    }
+    setIsLoggedIn(false);
+    setStudents([]);
+    setSelectedStudent(null);
+    setAttendanceLogs([]);
+  };
+
+  const fetchAttendance = async (studentId, currentInstCode) => {
+    const code = (currentInstCode || instituteCode || '').trim().toLowerCase();
+    if (!code || !studentId) return;
+
     try {
       const res = await fetchWithTimeout(
-        `${SERVER_URL}/api/institutes/${instituteCode.trim().toLowerCase()}/students/${studentId}/attendance`,
+        `${SERVER_URL}/api/institutes/${code}/students/${studentId}/attendance`,
         {},
         8000
       );
@@ -276,7 +399,7 @@ export default function App() {
       Vibration.vibrate([0, 500, 200, 500, 200, 500]);
       await Notifications.scheduleNotificationAsync({
         content: {
-          title: '🔔 Loud Attendance Alert Test',
+          title: 'Loud Attendance Alert Test',
           body: 'Attendance alert chime, heads-up banner, and vibration are active!',
           sound: 'default',
           channelId: 'attendance-alerts',
@@ -286,7 +409,7 @@ export default function App() {
         trigger: null,
       });
       Alert.alert(
-        '🔊 Loud Alert Triggered',
+        'Loud Alert Triggered',
         'Your phone notification bar received a maximum-volume alert chime and vibration! You will hear this loud alert whenever attendance is recorded.'
       );
     } catch (err) {
@@ -334,7 +457,8 @@ export default function App() {
 
     return (
       <View style={styles.dateHeaderContainer}>
-        <Text style={styles.dateHeaderText}>📅 {title}</Text>
+        <CalendarBadgeIcon size={14} color="#4338CA" />
+        <Text style={styles.dateHeaderText}>{title}</Text>
       </View>
     );
   };
@@ -362,11 +486,7 @@ export default function App() {
       <View>
         {getDateHeader(item, index)}
         <View style={styles.logCard}>
-          <View style={[styles.punchIconContainer, isEntry ? styles.entryBg : styles.exitBg]}>
-            <Text style={[styles.punchIconText, isEntry ? styles.entryColor : styles.exitColor]}>
-              {isEntry ? '➔ In' : '← Out'}
-            </Text>
-          </View>
+          <PunchDirectionIcon isEntry={isEntry} size={22} />
 
           <View style={styles.logInfo}>
             <View style={styles.logRow}>
@@ -378,13 +498,26 @@ export default function App() {
               </View>
             </View>
             <View style={styles.logSubRow}>
-              <Text style={styles.deviceLabel}>📍 {item.device_name || 'Biometric Gate'}</Text>
+              <ScannerTargetIcon size={12} color="#64748B" />
+              <Text style={styles.deviceLabel}>{item.device_name || 'Biometric Gate'}</Text>
             </View>
           </View>
         </View>
       </View>
     );
   };
+
+  if (isRestoringSession) {
+    return (
+      <SafeAreaView style={[styles.safeArea, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#312E81' }]}>
+        <StatusBar barStyle="light-content" backgroundColor="#312E81" translucent={false} />
+        <ActivityIndicator size="large" color="#FFFFFF" />
+        <Text style={{ marginTop: 14, color: '#E0E7FF', fontSize: 15, fontWeight: '600' }}>
+          Restoring Attendance Session...
+        </Text>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -396,7 +529,7 @@ export default function App() {
           <View style={styles.loginWrapper}>
             <View style={styles.heroSection}>
               <View style={styles.logoCircle}>
-                <Text style={styles.logoIcon}>🏫</Text>
+                <AcademyEmblem size={44} color="#FFFFFF" />
               </View>
               <Text style={styles.heroTitle}>Student Attendance Tracker</Text>
               <TouchableOpacity onPress={() => Linking.openURL('https://www.tiastech.in')} activeOpacity={0.8}>
@@ -426,7 +559,9 @@ export default function App() {
               <View style={styles.inputContainer}>
                 <Text style={styles.fieldLabel}>MOBILE NUMBER</Text>
                 <View style={styles.phoneInputRow}>
-                  <Text style={styles.countryCode}>🇮🇳 +91</Text>
+                  <View style={styles.countryPill}>
+                    <Text style={styles.countryPillText}>+91</Text>
+                  </View>
                   <TextInput
                     style={styles.textInput}
                     placeholder="9876543210"
@@ -448,7 +583,7 @@ export default function App() {
                 {loading ? (
                   <ActivityIndicator color="#FFFFFF" />
                 ) : (
-                  <Text style={styles.signInButtonText}>Enter Institute Portal ➔</Text>
+                  <Text style={styles.signInButtonText}>Enter Institute Portal</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -481,17 +616,16 @@ export default function App() {
                 style={styles.soundBtn}
                 activeOpacity={0.75}
               >
-                <Text style={{ fontSize: 16 }}>🔊</Text>
+                <ChimeIcon size={18} color="#FFFFFF" />
               </TouchableOpacity>
 
               {/* Logout Button */}
               <TouchableOpacity
-                onPress={() => {
-                  setIsLoggedIn(false);
-                }}
+                onPress={handleLogout}
                 style={styles.logoutBtn}
                 activeOpacity={0.75}
               >
+                <ExitDoorIcon size={14} color="#FFFFFF" />
                 <Text style={styles.logoutBtnText}>Logout</Text>
               </TouchableOpacity>
             </View>
@@ -510,6 +644,14 @@ export default function App() {
                   onPress={() => {
                     setSelectedStudent(s);
                     fetchAttendance(s.student_id);
+                    AsyncStorage.setItem(
+                      '@parent_session',
+                      JSON.stringify({
+                        instituteCode: instituteCode.trim().toLowerCase(),
+                        phone: phone.trim(),
+                        selectedStudentId: s.student_id,
+                      })
+                    ).catch(() => {});
                   }}
                 >
                   <Text
@@ -538,9 +680,9 @@ export default function App() {
               activeOpacity={0.7}
             >
               {refreshing ? (
-                <ActivityIndicator size="small" color="#4F46E5" style={{ marginRight: 4 }} />
+                <ActivityIndicator size="small" color="#4F46E5" style={{ marginRight: 6 }} />
               ) : (
-                <Text style={styles.refreshIcon}>🔄</Text>
+                <SyncCycleIcon size={14} color="#4F46E5" />
               )}
               <Text style={styles.refreshBtnText}>{refreshing ? 'Syncing...' : 'Refresh'}</Text>
             </TouchableOpacity>
@@ -579,9 +721,7 @@ export default function App() {
               </Text>
             </View>
             <View style={styles.todayBadge}>
-              <Text style={styles.todayBadgeIcon}>
-                {todayLatest ? (todayLatest.punch_type === 'ENTRY' ? '🏫' : '👋') : '⏳'}
-              </Text>
+              <StatusCrest status={todayLatest ? todayLatest.punch_type : 'NONE'} size={42} />
             </View>
           </View>
 
@@ -602,7 +742,7 @@ export default function App() {
               contentContainerStyle={styles.listContent}
               ListEmptyComponent={
                 <View style={styles.emptyState}>
-                  <Text style={styles.emptyIcon}>📋</Text>
+                  <EmptyAttendanceGraphic size={64} />
                   <Text style={styles.emptyTitle}>No Attendance Records Found</Text>
                   <Text style={styles.emptyDesc}>
                     When {selectedStudent?.name} punches on this institute's biometric scanner, logs will show here instantly.
@@ -707,11 +847,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
     paddingHorizontal: 12,
   },
-  countryCode: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#334155',
+  countryPill: {
+    backgroundColor: '#EEF2FF',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
     marginRight: 8,
+  },
+  countryPillText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#4338CA',
   },
   textInput: {
     flex: 1,
@@ -792,8 +940,11 @@ const styles = StyleSheet.create({
   },
   logoutBtn: {
     backgroundColor: 'rgba(255,255,255,0.18)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     paddingVertical: 8,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     borderRadius: 12,
   },
   logoutBtnText: {
@@ -961,6 +1112,9 @@ const styles = StyleSheet.create({
   },
   dateHeaderContainer: {
     backgroundColor: '#EEF2FF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 10,
@@ -1012,6 +1166,7 @@ const styles = StyleSheet.create({
   },
   logInfo: {
     flex: 1,
+    marginLeft: 12,
   },
   logRow: {
     flexDirection: 'row',
@@ -1047,8 +1202,8 @@ const styles = StyleSheet.create({
   },
   logSubRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 5,
     marginTop: 4,
   },
   deviceLabel: {

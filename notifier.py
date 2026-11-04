@@ -22,7 +22,7 @@ def send_expo_push_notification(
     Sends a push notification directly to an Expo mobile app token (ExponentPushToken[...]).
     Works out-of-the-box with Expo push notifications.
     """
-    if not token or not token.startswith("ExponentPushToken"):
+    if not token or not (token.startswith("ExponentPushToken") or token.startswith("ExpoPushToken")):
         logger.warning("Token %s is not a valid Expo Push Token", token)
         return False
 
