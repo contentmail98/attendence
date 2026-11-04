@@ -38,7 +38,6 @@
       <div class="p-6 sm:p-8 flex-1 flex flex-col justify-between space-y-6">
         <div>
           <h2 class="text-xl font-bold text-slate-900">Parent Login</h2>
-          <p class="text-xs sm:text-sm text-slate-500 mt-1">Enter your child's Coaching Institute Code and your registered mobile number.</p>
         </div>
 
         <form id="loginForm" onsubmit="handleLogin(event)" class="space-y-4">
@@ -241,6 +240,7 @@
       const icon = document.getElementById('audioIcon');
       if (audioEnabled) {
         icon.className = 'fa-solid fa-volume-high text-white';
+        playPunchSound(true); // Test sound immediately when clicked
       } else {
         icon.className = 'fa-solid fa-volume-xmark text-rose-300';
       }

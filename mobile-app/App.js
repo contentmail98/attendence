@@ -13,8 +13,8 @@ import {
   Platform,
   RefreshControl,
   ScrollView,
-  Modal,
   Linking,
+  Vibration,
 } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
@@ -27,8 +27,8 @@ Notifications.setNotificationHandler({
   }),
 });
 
-// Default server URL — Production Render URL
-const DEFAULT_SERVER_URL = 'https://attendance-api-iw7z.onrender.com';
+// Production Render Server URL
+const SERVER_URL = 'https://attendance-api-iw7z.onrender.com';
 
 // Helper: fetch with timeout (default 10 seconds)
 function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
@@ -36,7 +36,7 @@ function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
     const controller = new AbortController();
     const timer = setTimeout(() => {
       controller.abort();
-      reject(new Error(`Request timed out after ${timeoutMs / 1000}s. Server at ${url} is not reachable from this device.`));
+      reject(new Error(`Request timed out after ${timeoutMs / 1000}s. Server is not reachable.`));
     }, timeoutMs);
 
     fetch(url, { ...options, signal: controller.signal })
@@ -66,12 +66,6 @@ export default function App() {
   const [refreshing, setRefreshing] = useState(false);
   const [deviceToken, setDeviceToken] = useState(null);
 
-  // Server URL (configurable from Settings)
-  const [serverUrl, setServerUrl] = useState(DEFAULT_SERVER_URL);
-  const [showSettings, setShowSettings] = useState(false);
-  const [tempServerUrl, setTempServerUrl] = useState(DEFAULT_SERVER_URL);
-  const [testingConnection, setTestingConnection] = useState(false);
-
   useEffect(() => {
     registerForPushNotificationsAsync().then((token) => {
       if (token) setDeviceToken(token);
@@ -87,7 +81,7 @@ export default function App() {
     const pollInterval = setInterval(async () => {
       try {
         const res = await fetchWithTimeout(
-          `${serverUrl}/api/institutes/${instituteCode.trim().toLowerCase()}/students/${selectedStudent.student_id}/attendance`,
+          `${SERVER_URL}/api/institutes/${instituteCode.trim().toLowerCase()}/students/${selectedStudent.student_id}/attendance`,
           {},
           5000
         );
@@ -101,9 +95,10 @@ export default function App() {
             lastKnownPunchId = latest.id;
             setAttendanceLogs(logs);
 
-            // Pop OS system banner
+            // Pop OS system banner with chime
             try {
               const isEntry = latest.punch_type === 'ENTRY';
+              Vibration.vibrate([0, 200, 100, 200]);
               await Notifications.scheduleNotificationAsync({
                 content: {
                   title: isEntry ? '🏫 Student Check-In' : '👋 Student Check-Out',
@@ -126,7 +121,7 @@ export default function App() {
     }, 3000);
 
     return () => clearInterval(pollInterval);
-  }, [isLoggedIn, selectedStudent, instituteCode, serverUrl]);
+  }, [isLoggedIn, selectedStudent, instituteCode]);
 
   async function registerForPushNotificationsAsync() {
     let token = null;
@@ -169,33 +164,13 @@ export default function App() {
     return token;
   }
 
-  // Test connection to server
-  const testConnection = async (url) => {
-    setTestingConnection(true);
-    try {
-      const testUrl = url.replace(/\/+$/, ''); // remove trailing slash
-      const res = await fetchWithTimeout(`${testUrl}/health`, {}, 5000);
-      const data = await res.json();
-      Alert.alert('✅ Connected!', `Server is online.\nMode: ${data.mode || 'unknown'}\n\nYou can now login.`);
-      return true;
-    } catch (err) {
-      Alert.alert(
-        '❌ Cannot Connect',
-        `Failed to reach: ${url}/health\n\nError: ${err.message}\n\nMake sure:\n1. python main.py is running on your PC\n2. Your phone can reach that IP\n3. Try using ngrok if on different networks`
-      );
-      return false;
-    } finally {
-      setTestingConnection(false);
-    }
-  };
-
   // Handle Login with Institute Code + Mobile Number
   const handleLogin = async () => {
     const cleanCode = instituteCode.trim().toLowerCase();
     const cleanPhone = phone.trim();
 
     if (!cleanCode) {
-      Alert.alert('Required', 'Please enter your Coaching Institute Code (e.g. apex).');
+      Alert.alert('Required', 'Please enter your Coaching Institute Code (e.g. prepx).');
       return;
     }
     if (!cleanPhone) {
@@ -206,7 +181,7 @@ export default function App() {
     setLoading(true);
     try {
       const res = await fetchWithTimeout(
-        `${serverUrl}/api/institutes/${cleanCode}/parents/${cleanPhone}/students`,
+        `${SERVER_URL}/api/institutes/${cleanCode}/parents/${cleanPhone}/students`,
         {},
         10000
       );
@@ -222,7 +197,7 @@ export default function App() {
       if (!data || data.length === 0) {
         Alert.alert(
           'Student Not Found',
-          `No student found for phone number "${cleanPhone}" under Institute "${cleanCode.toUpperCase()}".\n\nPlease check the registered phone number in that center's portal.`
+          `No student found for phone number "${cleanPhone}" under Institute "${cleanCode.toUpperCase()}".`
         );
         setLoading(false);
         return;
@@ -233,9 +208,9 @@ export default function App() {
       setSelectedStudent(student);
       setIsLoggedIn(true);
 
-      // Register device token on multi-tenant server (non-blocking)
+      // Register device token on server (non-blocking)
       const pushTokenToSend = deviceToken || `ActiveApp-${cleanPhone}`;
-      fetch(`${serverUrl}/api/parents/register-token`, {
+      fetch(`${SERVER_URL}/api/parents/register-token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -249,15 +224,7 @@ export default function App() {
       fetchAttendance(student.student_id);
     } catch (err) {
       console.log('Login error:', err.name, err.message);
-      let msg;
-      if (err.message && err.message.includes('timed out')) {
-        msg = `Cannot reach server at ${serverUrl}.\n\nTap the ⚙️ icon to check your Server URL, or use the "Test Connection" button.`;
-      } else if (err.message && (err.message.includes('Network request failed') || err.message.includes('fetch'))) {
-        msg = `Network error reaching ${serverUrl}.\n\nTap ⚙️ to verify your Server URL and test the connection.`;
-      } else {
-        msg = err.message || 'Cannot connect to server';
-      }
-      Alert.alert('Login Failed', msg);
+      Alert.alert('Login Failed', err.message || 'Cannot connect to server. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -266,7 +233,7 @@ export default function App() {
   const fetchAttendance = async (studentId) => {
     try {
       const res = await fetchWithTimeout(
-        `${serverUrl}/api/institutes/${instituteCode.trim().toLowerCase()}/students/${studentId}/attendance`,
+        `${SERVER_URL}/api/institutes/${instituteCode.trim().toLowerCase()}/students/${studentId}/attendance`,
         {},
         8000
       );
@@ -285,7 +252,29 @@ export default function App() {
     setRefreshing(true);
     await fetchAttendance(selectedStudent.student_id);
     setRefreshing(false);
-  }, [selectedStudent, instituteCode, serverUrl]);
+  }, [selectedStudent, instituteCode]);
+
+  // Test Sound Feature on Working Dashboard Page
+  const handleTestSound = async () => {
+    try {
+      Vibration.vibrate([0, 150, 100, 150]);
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '🔔 Sound Alert Test',
+          body: 'Attendance alert chime and vibration are working perfectly!',
+          sound: true,
+          vibrate: [0, 250, 250, 250],
+        },
+        trigger: null,
+      });
+      Alert.alert(
+        '🔊 Sound Test Triggered',
+        'Your phone notification sound and vibration have been triggered! You will hear this whenever attendance is recorded.'
+      );
+    } catch (err) {
+      console.log('Sound test error:', err);
+    }
+  };
 
   const getTodayStatus = () => {
     if (!attendanceLogs || attendanceLogs.length === 0) return null;
@@ -379,88 +368,17 @@ export default function App() {
     );
   };
 
-  // ======================== SETTINGS MODAL ========================
-  const renderSettingsModal = () => (
-    <Modal visible={showSettings} animationType="slide" transparent>
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>⚙️ Server Settings</Text>
-          <Text style={styles.modalDesc}>
-            Enter the URL where your Python backend is running. Use your PC's Wi-Fi IP, or an ngrok URL for remote access.
-          </Text>
-
-          <Text style={styles.fieldLabel}>SERVER URL</Text>
-          <TextInput
-            style={styles.textInputFull}
-            value={tempServerUrl}
-            onChangeText={setTempServerUrl}
-            placeholder="https://attendance-api-iw7z.onrender.com"
-            placeholderTextColor="#94A3B8"
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="url"
-          />
-
-          <TouchableOpacity
-            style={[styles.signInButton, { backgroundColor: '#059669', marginTop: 12 }]}
-            onPress={() => testConnection(tempServerUrl.trim().replace(/\/+$/, ''))}
-            disabled={testingConnection}
-          >
-            {testingConnection ? (
-              <ActivityIndicator color="#FFF" />
-            ) : (
-              <Text style={styles.signInButtonText}>🔗 Test Connection</Text>
-            )}
-          </TouchableOpacity>
-
-          <View style={{ flexDirection: 'row', marginTop: 12, gap: 8 }}>
-            <TouchableOpacity
-              style={[styles.signInButton, { flex: 1, backgroundColor: '#4F46E5' }]}
-              onPress={() => {
-                const cleaned = tempServerUrl.trim().replace(/\/+$/, '');
-                setServerUrl(cleaned);
-                setShowSettings(false);
-                Alert.alert('Saved', `Server URL set to:\n${cleaned}`);
-              }}
-            >
-              <Text style={styles.signInButtonText}>💾 Save</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.signInButton, { flex: 1, backgroundColor: '#64748B' }]}
-              onPress={() => {
-                setTempServerUrl(serverUrl);
-                setShowSettings(false);
-              }}
-            >
-              <Text style={styles.signInButtonText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.helpBox}>
-            <Text style={styles.helpTitle}>💡 Connection Tips</Text>
-            <Text style={styles.helpText}>• Same Wi-Fi: Use PC's IP (e.g. http://192.168.29.73:8000)</Text>
-            <Text style={styles.helpText}>• Mobile Data: Use ngrok URL (e.g. https://abc.ngrok-free.app)</Text>
-            <Text style={styles.helpText}>• Find PC IP: Run "ipconfig" in PowerShell → Wi-Fi IPv4</Text>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#4338CA" translucent={false} />
 
-      {renderSettingsModal()}
-
       {!isLoggedIn ? (
-        /* ================= MULTI-TENANT LOGIN SCREEN ================= */
+        /* ================= CLEAN LOGIN SCREEN ================= */
         <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
           <View style={styles.loginWrapper}>
             <View style={styles.heroSection}>
               <View style={styles.logoCircle}>
-                <Text style={styles.logoIcon}>🏢</Text>
+                <Text style={styles.logoIcon}>🏫</Text>
               </View>
               <Text style={styles.heroTitle}>Student Attendance Tracker</Text>
               <TouchableOpacity onPress={() => Linking.openURL('https://www.tiastech.in')} activeOpacity={0.8}>
@@ -471,39 +389,14 @@ export default function App() {
             </View>
 
             <View style={styles.loginCard}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={styles.cardHeader}>Parent Login</Text>
-                <TouchableOpacity
-                  onPress={() => {
-                    setTempServerUrl(serverUrl);
-                    setShowSettings(true);
-                  }}
-                  style={styles.settingsBtn}
-                >
-                  <Text style={{ fontSize: 20 }}>⚙️</Text>
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.cardSub}>
-                Enter your child's Coaching Institute Code and your registered mobile number.
-              </Text>
-
-              {/* Server URL indicator */}
-              <TouchableOpacity
-                onPress={() => {
-                  setTempServerUrl(serverUrl);
-                  setShowSettings(true);
-                }}
-                style={styles.serverIndicator}
-              >
-                <Text style={styles.serverIndicatorText}>🖥️ {serverUrl}</Text>
-              </TouchableOpacity>
+              <Text style={styles.cardHeader}>Parent Login</Text>
 
               {/* Institute Code Input */}
-              <View style={styles.inputContainer}>
+              <View style={[styles.inputContainer, { marginTop: 16 }]}>
                 <Text style={styles.fieldLabel}>INSTITUTE CODE</Text>
                 <TextInput
                   style={[styles.textInputFull, { textTransform: 'lowercase', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }]}
-                  placeholder="e.g. apex or allen"
+                  placeholder="e.g. prepx"
                   placeholderTextColor="#94A3B8"
                   autoCapitalize="none"
                   value={instituteCode}
@@ -544,7 +437,7 @@ export default function App() {
           </View>
         </ScrollView>
       ) : (
-        /* ================= DASHBOARD SCREEN ================= */
+        /* ================= WORKING DASHBOARD SCREEN ================= */
         <View style={styles.dashboardWrapper}>
           <View style={styles.dashboardHeader}>
             <View style={styles.headerLeft}>
@@ -558,19 +451,32 @@ export default function App() {
                   {selectedStudent?.name || 'Student'}
                 </Text>
                 <Text style={styles.headerGradeText}>
-                  {selectedStudent?.institute_name} • ID: #{selectedStudent?.student_id}
+                  {selectedStudent?.institute_name || instituteCode.toUpperCase()} • ID: #{selectedStudent?.student_id}
                 </Text>
               </View>
             </View>
 
-            <TouchableOpacity
-              onPress={() => {
-                setIsLoggedIn(false);
-              }}
-              style={styles.logoutBtn}
-            >
-              <Text style={styles.logoutBtnText}>Logout</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              {/* Sound Test Icon Button */}
+              <TouchableOpacity
+                onPress={handleTestSound}
+                style={styles.soundBtn}
+                activeOpacity={0.75}
+              >
+                <Text style={{ fontSize: 16 }}>🔊</Text>
+              </TouchableOpacity>
+
+              {/* Logout Button */}
+              <TouchableOpacity
+                onPress={() => {
+                  setIsLoggedIn(false);
+                }}
+                style={styles.logoutBtn}
+                activeOpacity={0.75}
+              >
+                <Text style={styles.logoutBtnText}>Logout</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Student Tabs if multiple enrolled under same parent */}
@@ -690,12 +596,12 @@ const styles = StyleSheet.create({
   heroSubtitle: {
     fontSize: 12,
     color: '#C7D2FE',
-    marginTop: 3,
+    marginTop: 6,
   },
   loginCard: {
     backgroundColor: '#FFFFFF',
     marginHorizontal: 20,
-    marginTop: -26,
+    marginTop: -24,
     borderRadius: 24,
     padding: 24,
     shadowColor: '#0F172A',
@@ -707,37 +613,9 @@ const styles = StyleSheet.create({
   },
   cardHeader: {
     fontSize: 20,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#1E293B',
-  },
-  cardSub: {
-    fontSize: 13,
-    color: '#64748B',
-    marginTop: 4,
-    marginBottom: 10,
-    lineHeight: 18,
-  },
-  settingsBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  serverIndicator: {
-    backgroundColor: '#F1F5F9',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  serverIndicatorText: {
-    fontSize: 11,
-    color: '#64748B',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    marginBottom: 6,
   },
   inputContainer: {
     marginBottom: 16,
@@ -787,7 +665,7 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     borderRadius: 14,
     alignItems: 'center',
-    marginTop: 6,
+    marginTop: 8,
     shadowColor: '#4F46E5',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
@@ -800,49 +678,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  /* SETTINGS MODAL */
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-  },
-  modalContent: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 24,
-    maxHeight: '85%',
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#1E293B',
-    marginBottom: 6,
-  },
-  modalDesc: {
-    fontSize: 13,
-    color: '#64748B',
-    lineHeight: 18,
-    marginBottom: 16,
-  },
-  helpBox: {
-    backgroundColor: '#F1F5F9',
-    borderRadius: 12,
-    padding: 14,
-    marginTop: 16,
-  },
-  helpTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#334155',
-    marginBottom: 6,
-  },
-  helpText: {
-    fontSize: 12,
-    color: '#64748B',
-    lineHeight: 20,
-  },
-
   /* DASHBOARD */
   dashboardWrapper: {
     flex: 1,
@@ -852,7 +687,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#4338CA',
     paddingHorizontal: 20,
     paddingTop: Platform.OS === 'android' ? 44 : 24,
-    paddingBottom: 22,
+    paddingBottom: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -861,7 +696,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    marginRight: 12,
+    marginRight: 10,
   },
   avatarCircle: {
     width: 44,
@@ -887,16 +722,24 @@ const styles = StyleSheet.create({
     color: '#C7D2FE',
     marginTop: 2,
   },
+  soundBtn: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   logoutBtn: {
     backgroundColor: 'rgba(255,255,255,0.18)',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 12,
   },
   logoutBtnText: {
     color: '#FFFFFF',
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   tabsScroll: {
     backgroundColor: '#3730A3',
@@ -956,7 +799,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 6,
   },
   sectionHeading: {
     fontSize: 16,
@@ -967,6 +810,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748B',
   },
+  dateHeaderContainer: {
+    backgroundColor: '#EEF2FF',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginTop: 12,
+    marginBottom: 8,
+    alignSelf: 'flex-start',
+  },
+  dateHeaderText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#4338CA',
+  },
   listContent: {
     paddingBottom: 24,
   },
@@ -976,20 +833,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 14,
-    marginBottom: 10,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
   punchIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
   punchIconText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
   },
   entryBg: {
@@ -1045,28 +902,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 4,
   },
-  logDate: {
-    fontSize: 12,
-    color: '#64748B',
-    fontWeight: '500',
-  },
   deviceLabel: {
     fontSize: 11,
     color: '#94A3B8',
-  },
-  dateHeaderContainer: {
-    backgroundColor: '#EEF2FF',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    marginTop: 10,
-    marginBottom: 8,
-    alignSelf: 'flex-start',
-  },
-  dateHeaderText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#4338CA',
   },
   emptyState: {
     alignItems: 'center',

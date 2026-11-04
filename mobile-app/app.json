@@ -19,10 +19,16 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#4338CA"
       },
-      "usesCleartextTraffic": true
+      "usesCleartextTraffic": true,
+      "package": "com.arpitjainofficialsteam.studentattendancetracker"
     },
     "plugins": [
       "expo-status-bar"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "d7b8e82d-8623-49d0-ad6c-41d6df76473f"
+      }
+    }
   }
 }
