@@ -160,6 +160,15 @@ async def parent_web_app():
         return HTMLResponse(f.read())
 
 
+@app.get("/privacy-policy", response_class=HTMLResponse)
+@app.get("/privacy", response_class=HTMLResponse)
+async def privacy_policy_page():
+    """Serves the Privacy Policy Page."""
+    path = os.path.join(os.path.dirname(__file__), "templates", "privacy_policy.html")
+    with open(path, "r", encoding="utf-8") as f:
+        return HTMLResponse(f.read())
+
+
 @app.get("/portal/{institute_code}", response_class=HTMLResponse)
 async def institute_portal_page(institute_code: str, db: Session = Depends(get_db)):
     inst = db.query(Institute).filter(Institute.code == institute_code.lower()).first()

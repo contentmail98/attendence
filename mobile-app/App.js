@@ -586,6 +586,20 @@ export default function App() {
                   <Text style={styles.signInButtonText}>Enter Institute Portal</Text>
                 )}
               </TouchableOpacity>
+
+              {/* Small Privacy Policy Notice */}
+              <View style={styles.privacyContainer}>
+                <Text style={styles.privacyText}>
+                  By continuing, you agree to our{' '}
+                  <Text
+                    style={styles.privacyLink}
+                    onPress={() => Linking.openURL(`${SERVER_URL}/privacy-policy`)}
+                  >
+                    Privacy Policy
+                  </Text>
+                  . Student biometric records are encrypted and protected.
+                </Text>
+              </View>
             </View>
           </View>
         </ScrollView>
@@ -884,6 +898,22 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '700',
+  },
+  privacyContainer: {
+    marginTop: 14,
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  privacyText: {
+    fontSize: 11,
+    color: '#94A3B8',
+    textAlign: 'center',
+    lineHeight: 16,
+  },
+  privacyLink: {
+    color: '#4F46E5',
+    fontWeight: '700',
+    textDecorationLine: 'underline',
   },
 
   /* DASHBOARD */
