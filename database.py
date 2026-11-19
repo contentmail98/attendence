@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, create_engine, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, create_engine, UniqueConstraint, text, inspect
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from dotenv import load_dotenv
 
@@ -79,34 +79,34 @@ class AttendanceRecord(Base):
 
 def init_db():
     Base.metadata.create_all(bind=engine)
-    
-    # Auto-migrate existing SQLite columns if upgrading from old single-tenant database
-    if "sqlite" in DATABASE_URL:
-        import sqlite3
-        try:
-            conn = sqlite3.connect("./attendance.db")
-            c = conn.cursor()
-            c.execute("PRAGMA table_info(students);")
-            student_cols = [col[1] for col in c.fetchall()]
-            if "institute_id" not in student_cols and len(student_cols) > 0:
-                c.execute("ALTER TABLE students ADD COLUMN institute_id INTEGER DEFAULT 1;")
-                conn.commit()
 
-            c.execute("PRAGMA table_info(attendance_records);")
-            att_cols = [col[1] for col in c.fetchall()]
-            if "institute_id" not in att_cols and len(att_cols) > 0:
-                c.execute("ALTER TABLE attendance_records ADD COLUMN institute_id INTEGER DEFAULT 1;")
-                conn.commit()
+    # Automatic schema migration for existing databases (PostgreSQL & SQLite)
+    try:
+        inspector = inspect(engine)
+        table_names = inspector.get_table_names()
 
-            c.execute("PRAGMA table_info(institutes);")
-            inst_cols = [col[1] for col in c.fetchall()]
-            if "integration_date" not in inst_cols and len(inst_cols) > 0:
-                c.execute("ALTER TABLE institutes ADD COLUMN integration_date DATETIME;")
-                conn.commit()
+        if "institutes" in table_names:
+            cols = [c["name"] for c in inspector.get_columns("institutes")]
+            if "integration_date" not in cols:
+                with engine.begin() as conn:
+                    if "sqlite" in DATABASE_URL:
+                        conn.execute(text("ALTER TABLE institutes ADD COLUMN integration_date DATETIME"))
+                    else:
+                        conn.execute(text("ALTER TABLE institutes ADD COLUMN IF NOT EXISTS integration_date TIMESTAMP WITHOUT TIME ZONE"))
 
-            conn.close()
-        except Exception as e:
-            print("Schema check:", e)
+        if "students" in table_names:
+            cols = [c["name"] for c in inspector.get_columns("students")]
+            if "institute_id" not in cols:
+                with engine.begin() as conn:
+                    conn.execute(text("ALTER TABLE students ADD COLUMN institute_id INTEGER DEFAULT 1"))
+
+        if "attendance_records" in table_names:
+            cols = [c["name"] for c in inspector.get_columns("attendance_records")]
+            if "institute_id" not in cols:
+                with engine.begin() as conn:
+                    conn.execute(text("ALTER TABLE attendance_records ADD COLUMN institute_id INTEGER DEFAULT 1"))
+    except Exception as e:
+        print("Schema auto-migration error:", e)
 
 
 def get_db():
