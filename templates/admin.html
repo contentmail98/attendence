@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Portal - Biometric Attendance & Parent Management</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen">
+
+  <!-- Navigation Bar -->
+  <header class="bg-indigo-700 text-white shadow-md sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex flex-wrap justify-between items-center gap-4">
+      <div class="flex items-center space-x-3">
+        <div class="bg-white/10 p-2.5 rounded-xl border border-white/20">
+          <i class="fa-solid fa-fingerprint text-2xl text-indigo-200"></i>
+        </div>
+        <div>
+          <h1 class="text-xl font-bold tracking-tight">Biometric Center Admin</h1>
+          <p class="text-xs text-indigo-200">Student & Parent Registration Portal</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <span id="serverStatus" class="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full bg-emerald-500/20 text-emerald-100 border border-emerald-400/30">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Server Online
+        </span>
+        <button onclick="fetchStats()" class="text-xs bg-indigo-600 hover:bg-indigo-500 px-3 py-1.5 rounded-lg border border-indigo-400/30 transition">
+          <i class="fa-solid fa-rotate-right mr-1"></i> Refresh
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-7xl mx-auto px-4 py-8">
+    
+    <!-- Top Stats Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+      <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/80 flex items-center justify-between">
+        <div>
+          <p class="text-xs font-semibold text-slate-500 uppercase">Total Students</p>
+          <h3 id="statTotalStudents" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+        </div>
+        <div class="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center text-lg">
+          <i class="fa-solid fa-user-graduate"></i>
+        </div>
+      </div>
+
+      <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/80 flex items-center justify-between">
+        <div>
+          <p class="text-xs font-semibold text-slate-500 uppercase">Registered Parents</p>
+          <h3 id="statTotalParents" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+        </div>
+        <div class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center text-lg">
+          <i class="fa-solid fa-users"></i>
+        </div>
+      </div>
+
+      <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/80 flex items-center justify-between">
+        <div>
+          <p class="text-xs font-semibold text-slate-500 uppercase">App Connected</p>
+          <h3 id="statAppConnected" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+        </div>
+        <div class="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center text-lg">
+          <i class="fa-solid fa-mobile-screen-button"></i>
+        </div>
+      </div>
+
+      <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/80 flex items-center justify-between">
+        <div>
+          <p class="text-xs font-semibold text-slate-500 uppercase">Today's Punches</p>
+          <h3 id="statTodayPunches" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+        </div>
+        <div class="w-12 h-12 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center text-lg">
+          <i class="fa-solid fa-clock-rotate-left"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- Two-Column Layout: Form on Left, Table on Right -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      
+      <!-- Student & Parent Registration Form (4 cols) -->
+      <div class="lg:col-span-4">
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sticky top-24">
+          <div class="flex items-center justify-between mb-5">
+            <h2 id="formTitle" class="text-lg font-bold text-slate-800 flex items-center gap-2">
+              <i class="fa-solid fa-user-plus text-indigo-600"></i> Register Student & Parent
+            </h2>
+            <button id="cancelEditBtn" onclick="resetForm()" class="hidden text-xs text-rose-600 hover:underline">
+              Cancel Edit
+            </button>
+          </div>
+
+          <form id="studentForm" onsubmit="handleFormSubmit(event)" class="space-y-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">
+                Biometric Terminal Student ID *
+              </label>
+              <input
+                type="text"
+                id="student_id"
+                required
+                placeholder="e.g. 101 (Must match device Employee No)"
+                class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
+              />
+              <p class="text-[11px] text-slate-400 mt-1">This ID must match the ID registered inside the Hikvision device.</p>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">
+                Student Full Name *
+              </label>
+              <input
+                type="text"
+                id="name"
+                required
+                placeholder="e.g. Rohan Sharma"
+                class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
+              />
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">
+                Class / Batch / Grade
+              </label>
+              <input
+                type="text"
+                id="grade"
+                placeholder="e.g. Class 10 - Batch A"
+                class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+              />
+            </div>
+
+            <div class="pt-2 border-t border-slate-100">
+              <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">
+                Parent Full Name
+              </label>
+              <input
+                type="text"
+                id="parent_name"
+                placeholder="e.g. Suresh Sharma"
+                class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+              />
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">
+                Parent Phone Number * (Used for App Login)
+              </label>
+              <input
+                type="tel"
+                id="parent_phone"
+                required
+                placeholder="e.g. 9876543210"
+                class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+              />
+              <p class="text-[11px] text-slate-400 mt-1">Parents use this number to log in to the Expo mobile app.</p>
+            </div>
+
+            <button
+              type="submit"
+              id="submitBtn"
+              class="w-full mt-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl text-sm transition shadow-sm flex items-center justify-center gap-2"
+            >
+              <i class="fa-solid fa-check"></i> Save Student & Parent
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Students List Table & Live Punches (8 cols) -->
+      <div class="lg:col-span-8 space-y-6">
+        
+        <!-- Students Directory Card -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          <div class="p-5 border-b border-slate-100 flex flex-wrap justify-between items-center gap-3">
+            <div>
+              <h3 class="text-base font-bold text-slate-800">Enrolled Students & Parents Directory</h3>
+              <p class="text-xs text-slate-500">List of all registered students with parent contact & app status</p>
+            </div>
+            <div class="relative">
+              <input
+                type="text"
+                id="searchInput"
+                onkeyup="filterStudents()"
+                placeholder="Search by name, ID or phone..."
+                class="pl-8 pr-3 py-1.5 text-xs rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-64"
+              />
+              <i class="fa-solid fa-magnifying-glass text-slate-400 absolute left-2.5 top-2.5 text-xs"></i>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm">
+              <thead class="bg-slate-50/75 text-xs uppercase font-semibold text-slate-500 border-b border-slate-100">
+                <tr>
+                  <th class="px-5 py-3">Student Info</th>
+                  <th class="px-5 py-3">Biometric ID</th>
+                  <th class="px-5 py-3">Parent Details</th>
+                  <th class="px-5 py-3">Mobile App Status</th>
+                  <th class="px-5 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="studentTableBody" class="divide-y divide-slate-100">
+                <tr>
+                  <td colspan="5" class="px-5 py-8 text-center text-slate-400 text-xs">
+                    Loading registered students...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Recent Live Punches Log -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
+              <h3 class="text-base font-bold text-slate-800">Real-Time Biometric Punch Feed</h3>
+            </div>
+            <button onclick="fetchLiveLogs()" class="text-xs text-indigo-600 hover:underline">
+              Refresh Feed
+            </button>
+          </div>
+
+          <div id="liveLogsContainer" class="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+            <p class="text-xs text-slate-400 text-center py-4">Waiting for biometric events...</p>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Notification Toast -->
+  <div id="toast" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
+    <div class="bg-slate-900 text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-2 text-sm">
+      <i id="toastIcon" class="fa-solid fa-circle-check text-emerald-400"></i>
+      <span id="toastMsg">Action completed successfully</span>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = window.location.origin;
+    let allStudents = [];
+
+    async function init() {
+      await fetchStudents();
+      await fetchStats();
+      await fetchLiveLogs();
+      // Auto refresh live logs every 8 seconds
+      setInterval(fetchLiveLogs, 8000);
+    }
+
+    // Show toast alert
+    function showToast(message, isError = false) {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toastMsg');
+      const toastIcon = document.getElementById('toastIcon');
+
+      toastMsg.innerText = message;
+      toastIcon.className = isError 
+        ? 'fa-solid fa-triangle-exclamation text-rose-400' 
+        : 'fa-solid fa-circle-check text-emerald-400';
+
+      toast.classList.remove('translate-y-20', 'opacity-0');
+      setTimeout(() => {
+        toast.classList.add('translate-y-20', 'opacity-0');
+      }, 3500);
+    }
+
+    // Fetch all students
+    async function fetchStudents() {
+      try {
+        const res = await fetch(`${API_BASE}/api/admin/students`);
+        allStudents = await res.json();
+        renderTable(allStudents);
+        updateCounters();
+      } catch (err) {
+        console.error('Error fetching students:', err);
+      }
+    }
+
+    // Render Student Table
+    function renderTable(students) {
+      const tbody = document.getElementById('studentTableBody');
+      if (students.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="5" class="px-5 py-8 text-center text-slate-400 text-xs">
+              No students enrolled yet. Use the form on the left to add your first student.
+            </td>
+          </tr>`;
+        return;
+      }
+
+      tbody.innerHTML = students.map(s => {
+        const hasToken = !!s.parent_fcm_token;
+        const appStatusBadge = hasToken 
+          ? `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800">
+               <i class="fa-solid fa-circle-check text-[10px]"></i> App Connected
+             </span>`
+          : `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-100 text-amber-800">
+               <i class="fa-regular fa-clock text-[10px]"></i> Pending Login
+             </span>`;
+
+        return `
+          <tr class="hover:bg-slate-50/80 transition">
+            <td class="px-5 py-3.5">
+              <div class="font-semibold text-slate-900">${escapeHtml(s.name)}</div>
+              <div class="text-xs text-slate-500">${escapeHtml(s.grade || 'No class specified')}</div>
+            </td>
+            <td class="px-5 py-3.5 font-mono text-xs font-semibold text-indigo-600">
+              #${escapeHtml(s.student_id)}
+            </td>
+            <td class="px-5 py-3.5">
+              <div class="text-slate-800 font-medium">${escapeHtml(s.parent_name || 'N/A')}</div>
+              <div class="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                <i class="fa-solid fa-phone text-[10px] text-slate-400"></i> ${escapeHtml(s.parent_phone)}
+              </div>
+            </td>
+            <td class="px-5 py-3.5">
+              ${appStatusBadge}
+            </td>
+            <td class="px-5 py-3.5 text-right space-x-2">
+              <button onclick='editStudent(${JSON.stringify(s)})' class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">
+                <i class="fa-solid fa-pen-to-square"></i> Edit
+              </button>
+              <button onclick="deleteStudent('${s.student_id}', '${escapeHtml(s.name)}')" class="text-xs text-rose-600 hover:text-rose-800 font-medium ml-2">
+                <i class="fa-solid fa-trash"></i> Delete
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // Filter students by search input
+    function filterStudents() {
+      const q = document.getElementById('searchInput').value.toLowerCase();
+      const filtered = allStudents.filter(s => 
+        s.name.toLowerCase().includes(q) ||
+        s.student_id.toLowerCase().includes(q) ||
+        s.parent_phone.includes(q) ||
+        (s.parent_name && s.parent_name.toLowerCase().includes(q))
+      );
+      renderTable(filtered);
+    }
+
+    // Handle Form Submit (Add / Update)
+    async function handleFormSubmit(e) {
+      e.preventDefault();
+      const studentData = {
+        student_id: document.getElementById('student_id').value.trim(),
+        name: document.getElementById('name').value.trim(),
+        grade: document.getElementById('grade').value.trim(),
+        parent_name: document.getElementById('parent_name').value.trim(),
+        parent_phone: document.getElementById('parent_phone').value.trim()
+      };
+
+      try {
+        const res = await fetch(`${API_BASE}/api/students`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(studentData)
+        });
+
+        if (!res.ok) throw new Error('Failed to save student record');
+
+        showToast(`Student ${studentData.name} saved successfully!`);
+        resetForm();
+        await fetchStudents();
+        await fetchStats();
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    }
+
+    // Edit Student
+    function editStudent(s) {
+      document.getElementById('student_id').value = s.student_id;
+      document.getElementById('student_id').readOnly = true;
+      document.getElementById('student_id').classList.add('bg-slate-100');
+      document.getElementById('name').value = s.name;
+      document.getElementById('grade').value = s.grade || '';
+      document.getElementById('parent_name').value = s.parent_name || '';
+      document.getElementById('parent_phone').value = s.parent_phone;
+
+      document.getElementById('formTitle').innerHTML = '<i class="fa-solid fa-user-pen text-amber-500"></i> Edit Student & Parent';
+      document.getElementById('submitBtn').innerHTML = '<i class="fa-solid fa-check"></i> Update Record';
+      document.getElementById('cancelEditBtn').classList.remove('hidden');
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // Reset Form
+    function resetForm() {
+      document.getElementById('studentForm').reset();
+      const idInput = document.getElementById('student_id');
+      idInput.readOnly = false;
+      idInput.classList.remove('bg-slate-100');
+
+      document.getElementById('formTitle').innerHTML = '<i class="fa-solid fa-user-plus text-indigo-600"></i> Register Student & Parent';
+      document.getElementById('submitBtn').innerHTML = '<i class="fa-solid fa-check"></i> Save Student & Parent';
+      document.getElementById('cancelEditBtn').classList.add('hidden');
+    }
+
+    // Delete Student
+    async function deleteStudent(studentId, name) {
+      if (!confirm(`Are you sure you want to delete ${name} (ID: ${studentId}) and their attendance history?`)) {
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/api/admin/students/${studentId}`, {
+          method: 'DELETE'
+        });
+        if (!res.ok) throw new Error('Failed to delete student');
+
+        showToast(`Deleted ${name}`);
+        await fetchStudents();
+        await fetchStats();
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    }
+
+    // Fetch Real-time Punch Logs
+    async function fetchLiveLogs() {
+      try {
+        const res = await fetch(`${API_BASE}/api/admin/recent-punches`);
+        const logs = await res.json();
+        const container = document.getElementById('liveLogsContainer');
+
+        if (logs.length === 0) {
+          container.innerHTML = '<p class="text-xs text-slate-400 text-center py-4">No punch events recorded yet today.</p>';
+          return;
+        }
+
+        container.innerHTML = logs.map(l => {
+          const isEntry = l.punch_type === 'ENTRY';
+          const badgeClass = isEntry 
+            ? 'bg-emerald-100 text-emerald-800 border-emerald-200' 
+            : 'bg-rose-100 text-rose-800 border-rose-200';
+          const icon = isEntry ? 'fa-arrow-right-to-bracket text-emerald-600' : 'fa-arrow-right-from-bracket text-rose-600';
+          const time = new Date(l.punch_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+          return `
+            <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200/70 text-xs">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg flex items-center justify-center bg-white border border-slate-200">
+                  <i class="fa-solid ${icon}"></i>
+                </div>
+                <div>
+                  <span class="font-bold text-slate-800">${escapeHtml(l.student_name || 'ID: ' + l.student_id)}</span>
+                  <span class="text-slate-400 ml-1.5">(ID #${escapeHtml(l.student_id)})</span>
+                  <p class="text-[11px] text-slate-500">${escapeHtml(l.device_name || 'Biometric Device')}</p>
+                </div>
+              </div>
+              <div class="text-right">
+                <span class="px-2 py-0.5 rounded-md text-[10px] font-bold border uppercase ${badgeClass}">
+                  ${l.punch_type}
+                </span>
+                <p class="text-[11px] text-slate-400 mt-1 font-mono">${time}</p>
+              </div>
+            </div>
+          `;
+        }).join('');
+      } catch (err) {
+        console.error('Error fetching logs:', err);
+      }
+    }
+
+    // Update Top Metric Counters
+    async function fetchStats() {
+      try {
+        const res = await fetch(`${API_BASE}/api/admin/stats`);
+        const stats = await res.json();
+        document.getElementById('statTotalStudents').innerText = stats.total_students || 0;
+        document.getElementById('statTotalParents').innerText = stats.unique_parents || 0;
+        document.getElementById('statAppConnected').innerText = stats.connected_apps || 0;
+        document.getElementById('statTodayPunches').innerText = stats.today_punches || 0;
+      } catch (err) {
+        console.error('Error loading stats:', err);
+      }
+    }
+
+    function updateCounters() {
+      fetchStats();
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    window.onload = init;
+  </script>
+</body>
+</html>

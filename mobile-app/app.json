@@ -1,0 +1,48 @@
+{
+  "expo": {
+    "name": "Student Attendance Tracker",
+    "slug": "student-attendance-tracker",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#4338CA"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#4338CA"
+      },
+      "usesCleartextTraffic": true,
+      "package": "com.arpitjainofficialsteam.studentattendancetracker",
+      "googleServicesFile": "./google-services.json"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/d7b8e82d-8623-49d0-ad6c-41d6df76473f"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "plugins": [
+      "expo-status-bar",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#4338CA"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "d7b8e82d-8623-49d0-ad6c-41d6df76473f"
+      }
+    }
+  }
+}

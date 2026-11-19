@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.env
+.env
+venv/
+env/
+ENV/
+
+# Database & logs
+attendance.db
+hikvision_events.log
+*.log
+
+# Node & Expo
+node_modules/
+.expo/
+dist/
+web-build/
+*.apk
+*.aab
+
+# OS
+.DS_Store
+Thumbs.db
