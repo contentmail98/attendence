@@ -279,8 +279,7 @@ export default function App() {
 
         const projectId =
           Constants?.expoConfig?.extra?.eas?.projectId ??
-          Constants?.easConfig?.projectId ??
-          'd7b8e82d-8623-49d0-ad6c-41d6df76473f';
+          Constants?.easConfig?.projectId;
 
         try {
           const expoTokenData = await Notifications.getExpoPushTokenAsync({

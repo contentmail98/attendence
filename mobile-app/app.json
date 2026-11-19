@@ -23,9 +23,6 @@
       "package": "com.arpitjainofficialsteam.studentattendancetracker",
       "googleServicesFile": "./google-services.json"
     },
-    "updates": {
-      "url": "https://u.expo.dev/d7b8e82d-8623-49d0-ad6c-41d6df76473f"
-    },
     "runtimeVersion": {
       "policy": "appVersion"
     },
@@ -38,11 +35,6 @@
           "color": "#4338CA"
         }
       ]
-    ],
-    "extra": {
-      "eas": {
-        "projectId": "d7b8e82d-8623-49d0-ad6c-41d6df76473f"
-      }
-    }
+    ]
   }
 }
