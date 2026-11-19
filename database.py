@@ -81,32 +81,24 @@ def init_db():
     Base.metadata.create_all(bind=engine)
 
     # Automatic schema migration for existing databases (PostgreSQL & SQLite)
-    try:
-        inspector = inspect(engine)
-        table_names = inspector.get_table_names()
+    is_sqlite = "sqlite" in DATABASE_URL
+    migration_statements = [
+        "ALTER TABLE institutes ADD COLUMN integration_date DATETIME",
+        "ALTER TABLE students ADD COLUMN institute_id INTEGER DEFAULT 1",
+        "ALTER TABLE attendance_records ADD COLUMN institute_id INTEGER DEFAULT 1",
+    ] if is_sqlite else [
+        "ALTER TABLE institutes ADD COLUMN IF NOT EXISTS integration_date TIMESTAMP WITHOUT TIME ZONE",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS institute_id INTEGER DEFAULT 1",
+        "ALTER TABLE attendance_records ADD COLUMN IF NOT EXISTS institute_id INTEGER DEFAULT 1",
+    ]
 
-        if "institutes" in table_names:
-            cols = [c["name"] for c in inspector.get_columns("institutes")]
-            if "integration_date" not in cols:
-                with engine.begin() as conn:
-                    if "sqlite" in DATABASE_URL:
-                        conn.execute(text("ALTER TABLE institutes ADD COLUMN integration_date DATETIME"))
-                    else:
-                        conn.execute(text("ALTER TABLE institutes ADD COLUMN IF NOT EXISTS integration_date TIMESTAMP WITHOUT TIME ZONE"))
-
-        if "students" in table_names:
-            cols = [c["name"] for c in inspector.get_columns("students")]
-            if "institute_id" not in cols:
-                with engine.begin() as conn:
-                    conn.execute(text("ALTER TABLE students ADD COLUMN institute_id INTEGER DEFAULT 1"))
-
-        if "attendance_records" in table_names:
-            cols = [c["name"] for c in inspector.get_columns("attendance_records")]
-            if "institute_id" not in cols:
-                with engine.begin() as conn:
-                    conn.execute(text("ALTER TABLE attendance_records ADD COLUMN institute_id INTEGER DEFAULT 1"))
-    except Exception as e:
-        print("Schema auto-migration error:", e)
+    for stmt in migration_statements:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(stmt))
+        except Exception:
+            # Column already exists or already migrated
+            pass
 
 
 def get_db():

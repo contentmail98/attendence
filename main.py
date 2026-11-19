@@ -23,7 +23,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from database import init_db, get_db, Institute, Student, AttendanceRecord, IST, get_ist_now
+from database import init_db, get_db, SessionLocal, Institute, Student, AttendanceRecord, IST, get_ist_now
 from notifier import send_expo_push_notification
 
 def format_punch_time(dt: Optional[datetime]) -> Optional[str]:
@@ -94,46 +94,54 @@ class ParentTokenRegister(BaseModel):
 # Seed Default Institutes on First Launch
 # ---------------------------------------------------------
 def seed_default_institutes():
-    db = next(get_db())
-    if db.query(Institute).count() == 0:
-        apex = Institute(
-            code="apex",
-            name="Apex Coaching Academy",
-            contact_person="Director Sharma",
-            contact_phone="9876543210",
-            address="Plot 42, Knowledge Park, Delhi NCR",
-        )
-        allen = Institute(
-            code="allen",
-            name="Allen Career Institute",
-            contact_person="Center Head Verma",
-            contact_phone="9123456789",
-            address="Road 1, Coaching Hub, Kota",
-        )
-        db.add_all([apex, allen])
-        db.commit()
+    db = SessionLocal()
+    try:
+        if db.query(Institute).count() == 0:
+            apex = Institute(
+                code="apex",
+                name="Apex Coaching Academy",
+                contact_person="Director Sharma",
+                contact_phone="9876543210",
+                address="Plot 42, Knowledge Park, Delhi NCR",
+            )
+            allen = Institute(
+                code="allen",
+                name="Allen Career Institute",
+                contact_person="Center Head Verma",
+                contact_phone="9123456789",
+                address="Road 1, Coaching Hub, Kota",
+            )
+            db.add_all([apex, allen])
+            db.commit()
 
-        # Seed sample student for Apex
-        s1 = Student(
-            institute_id=apex.id,
-            student_id="101",
-            name="Rohan Sharma",
-            grade="Class 10 - Batch A",
-            parent_name="Suresh Sharma",
-            parent_phone="9876543210",
-        )
-        # Seed sample student for Allen
-        s2 = Student(
-            institute_id=allen.id,
-            student_id="101",  # Same ID allowed in different institute!
-            name="Priya Patel",
-            grade="Class 12 - Science",
-            parent_name="Vikram Patel",
-            parent_phone="9123456789",
-        )
-        db.add_all([s1, s2])
-        db.commit()
-        logger.info("Initialized default institutes: Apex and Allen")
+            # Seed sample student for Apex
+            s1 = Student(
+                institute_id=apex.id,
+                student_id="101",
+                name="Rohan Sharma",
+                grade="Class 10 - Batch A",
+                parent_name="Suresh Sharma",
+                parent_phone="9876543210",
+            )
+            # Seed sample student for Allen
+            s2 = Student(
+                institute_id=allen.id,
+                student_id="101",  # Same ID allowed in different institute!
+                name="Priya Patel",
+                grade="Class 12 - Science",
+                parent_name="Vikram Patel",
+                parent_phone="9123456789",
+            )
+            db.add_all([s1, s2])
+            db.commit()
+            logger.info("Initialized default institutes: Apex and Allen")
+    except Exception as e:
+        logger.warning("Default institutes seeding skipped: %s", str(e))
+        db.rollback()
+    finally:
+        db.close()
+        from database import engine
+        engine.dispose()
 
 
 seed_default_institutes()
