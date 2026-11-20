@@ -20,6 +20,10 @@ dist/
 web-build/
 *.apk
 *.aab
+*.jks
+*.keystore
+credentials.json
+credentials/
 
 # OS
 .DS_Store
