@@ -608,28 +608,13 @@ export default function App() {
                 )}
               </TouchableOpacity>
 
-              {/* Privacy Policy Notice */}
-              <View style={styles.privacyContainer}>
-                <View style={styles.privacyShield}>
-                  <Text style={{ fontSize: 14 }}>🔒</Text>
-                </View>
-                <Text style={styles.privacyText}>
-                  By continuing, you agree to our{' '}
-                  <Text
-                    style={styles.privacyLink}
-                    onPress={() => Linking.openURL(`${SERVER_URL}/privacy-policy`)}
-                  >
-                    Privacy Policy
-                  </Text>
-                  .{'\n'}Student biometric data is encrypted and securely protected.
-                </Text>
-              </View>
+              {/* Privacy Policy */}
               <TouchableOpacity
-                style={styles.privacyButton}
+                style={styles.privacyLinkContainer}
                 onPress={() => Linking.openURL(`${SERVER_URL}/privacy-policy`)}
                 activeOpacity={0.7}
               >
-                <Text style={styles.privacyButtonText}>📄  Read Full Privacy Policy</Text>
+                <Text style={styles.privacyLinkText}>Privacy Policy</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -930,48 +915,16 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
   },
-  privacyContainer: {
-    marginTop: 18,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 12,
-    padding: 12,
-    gap: 10,
-  },
-  privacyShield: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: '#E0E7FF',
+  privacyLinkContainer: {
+    marginTop: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 1,
   },
-  privacyText: {
-    flex: 1,
-    fontSize: 12,
-    color: '#475569',
-    lineHeight: 18,
-  },
-  privacyLink: {
-    color: '#4F46E5',
-    fontWeight: '700',
-    textDecorationLine: 'underline',
-  },
-  privacyButton: {
-    marginTop: 10,
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: '#C7D2FE',
-    backgroundColor: '#EEF2FF',
-  },
-  privacyButtonText: {
+  privacyLinkText: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#4338CA',
+    color: '#64748B',
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
 
   /* DASHBOARD */
