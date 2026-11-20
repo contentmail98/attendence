@@ -24,7 +24,7 @@
       "googleServicesFile": "./google-services.json"
     },
     "updates": {
-      "url": "https://u.expo.dev/060733ea-54b6-454e-9b86-1f4ea9a496c6"
+      "url": "https://u.expo.dev/d7b8e82d-8623-49d0-ad6c-41d6df76473f"
     },
     "runtimeVersion": {
       "policy": "appVersion"
@@ -41,9 +41,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "060733ea-54b6-454e-9b86-1f4ea9a496c6"
+        "projectId": "d7b8e82d-8623-49d0-ad6c-41d6df76473f"
       }
     },
-    "owner": "accountmail98"
+    "owner": "arpitjainofficials-team"
   }
 }
