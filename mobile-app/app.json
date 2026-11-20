@@ -35,6 +35,12 @@
           "color": "#4338CA"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "060733ea-54b6-454e-9b86-1f4ea9a496c6"
+      }
+    },
+    "owner": "accountmail98"
   }
 }

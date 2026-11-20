@@ -80,25 +80,42 @@ class AttendanceRecord(Base):
 def init_db():
     Base.metadata.create_all(bind=engine)
 
-    # Automatic schema migration for existing databases (PostgreSQL & SQLite)
+    # Safe schema migration — adds missing columns without breaking startup
     is_sqlite = "sqlite" in DATABASE_URL
-    migration_statements = [
-        "ALTER TABLE institutes ADD COLUMN integration_date DATETIME",
-        "ALTER TABLE students ADD COLUMN institute_id INTEGER DEFAULT 1",
-        "ALTER TABLE attendance_records ADD COLUMN institute_id INTEGER DEFAULT 1",
-    ] if is_sqlite else [
-        "ALTER TABLE institutes ADD COLUMN IF NOT EXISTS integration_date TIMESTAMP WITHOUT TIME ZONE",
-        "ALTER TABLE students ADD COLUMN IF NOT EXISTS institute_id INTEGER DEFAULT 1",
-        "ALTER TABLE attendance_records ADD COLUMN IF NOT EXISTS institute_id INTEGER DEFAULT 1",
-    ]
+    migrations = {
+        "institutes": [
+            ("integration_date", "DATETIME" if is_sqlite else "TIMESTAMP WITHOUT TIME ZONE"),
+        ],
+        "students": [
+            ("institute_id", "INTEGER DEFAULT 1"),
+        ],
+        "attendance_records": [
+            ("institute_id", "INTEGER DEFAULT 1"),
+        ],
+    }
 
-    for stmt in migration_statements:
-        try:
-            with engine.begin() as conn:
-                conn.execute(text(stmt))
-        except Exception:
-            # Column already exists or already migrated
-            pass
+    with engine.connect() as conn:
+        for table, columns in migrations.items():
+            for col_name, col_type in columns:
+                try:
+                    if is_sqlite:
+                        # SQLite: check with PRAGMA first
+                        result = conn.execute(text(f"PRAGMA table_info({table})"))
+                        existing = [row[1] for row in result.fetchall()]
+                        if col_name not in existing:
+                            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}"))
+                            conn.commit()
+                    else:
+                        # PostgreSQL: check information_schema first
+                        result = conn.execute(text(
+                            "SELECT column_name FROM information_schema.columns "
+                            "WHERE table_name=:table AND column_name=:col"
+                        ), {"table": table, "col": col_name})
+                        if result.fetchone() is None:
+                            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}"))
+                            conn.commit()
+                except Exception as e:
+                    print(f"Migration skipped [{table}.{col_name}]: {e}")
 
 
 def get_db():
