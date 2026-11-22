@@ -449,6 +449,10 @@ def list_institutes(db: Session = Depends(get_db)):
     results = []
     for inst in institutes:
         student_count = db.query(Student).filter(Student.institute_id == inst.id).count()
+        teacher_count = db.query(Teacher).filter(Teacher.institute_id == inst.id).count()
+        announcement_count = db.query(Announcement).filter(Announcement.institute_id == inst.id).count()
+        test_count = db.query(Test).filter(Test.institute_id == inst.id).count()
+        timetable_count = db.query(TimetableSlot).filter(TimetableSlot.institute_id == inst.id).count()
         results.append({
             "id": inst.id,
             "code": inst.code,
@@ -457,6 +461,10 @@ def list_institutes(db: Session = Depends(get_db)):
             "contact_phone": inst.contact_phone,
             "address": inst.address,
             "student_count": student_count,
+            "teacher_count": teacher_count,
+            "announcement_count": announcement_count,
+            "test_count": test_count,
+            "timetable_count": timetable_count,
             "is_active": inst.is_active,
             "integration_date": inst.integration_date.strftime("%Y-%m-%d") if inst.integration_date else None,
         })
@@ -490,8 +498,15 @@ def delete_institute(institute_code: str, db: Session = Depends(get_db)):
     if not inst:
         raise HTTPException(status_code=404, detail="Institute not found")
 
-    # Cascade delete all attendance records and students under this institute
+    # Cascade delete all related records under this institute
     db.query(AttendanceRecord).filter(AttendanceRecord.institute_id == inst.id).delete()
+    db.query(Teacher).filter(Teacher.institute_id == inst.id).delete()
+    db.query(Announcement).filter(Announcement.institute_id == inst.id).delete()
+    db.query(TimetableSlot).filter(TimetableSlot.institute_id == inst.id).delete()
+    tests = db.query(Test).filter(Test.institute_id == inst.id).all()
+    for t in tests:
+        db.query(TestScore).filter(TestScore.test_id == t.id).delete()
+    db.query(Test).filter(Test.institute_id == inst.id).delete()
     db.query(Student).filter(Student.institute_id == inst.id).delete()
     db.delete(inst)
     db.commit()
@@ -505,8 +520,11 @@ def get_super_admin_stats(db: Session = Depends(get_db)):
     return {
         "total_institutes": db.query(Institute).count(),
         "total_students": db.query(Student).count(),
+        "total_teachers": db.query(Teacher).count(),
         "total_parents": db.query(func.count(func.distinct(Student.parent_phone))).scalar() or 0,
         "today_punches": db.query(AttendanceRecord).filter(AttendanceRecord.punch_time >= start_of_day).count(),
+        "total_announcements": db.query(Announcement).count(),
+        "total_tests": db.query(Test).count(),
     }
 
 
