@@ -42,6 +42,24 @@ class Institute(Base):
 
     students = relationship("Student", back_populates="institute", cascade="all, delete-orphan")
     attendance_records = relationship("AttendanceRecord", back_populates="institute", cascade="all, delete-orphan")
+    teachers = relationship("Teacher", back_populates="institute", cascade="all, delete-orphan")
+    announcements = relationship("Announcement", back_populates="institute", cascade="all, delete-orphan")
+    timetable_slots = relationship("TimetableSlot", back_populates="institute", cascade="all, delete-orphan")
+    tests = relationship("Test", back_populates="institute", cascade="all, delete-orphan")
+
+
+class Teacher(Base):
+    __tablename__ = "teachers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    institute_id = Column(Integer, ForeignKey("institutes.id"), index=True, nullable=False)
+    name = Column(String, nullable=False)
+    phone = Column(String, index=True, nullable=False)
+    subject = Column(String, nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=get_ist_now)
+
+    institute = relationship("Institute", back_populates="teachers")
 
 
 class Student(Base):
@@ -73,8 +91,72 @@ class AttendanceRecord(Base):
     punch_type = Column(String, nullable=False)  # 'ENTRY' or 'EXIT'
     device_name = Column(String, nullable=True)
     notes = Column(String, nullable=True)
+    reason = Column(String, nullable=True)  # Early out reason or notes
+    is_early_exit = Column(Boolean, default=False)
 
     institute = relationship("Institute", back_populates="attendance_records")
+
+
+class Announcement(Base):
+    __tablename__ = "announcements"
+
+    id = Column(Integer, primary_key=True, index=True)
+    institute_id = Column(Integer, ForeignKey("institutes.id"), index=True, nullable=False)
+    title = Column(String, nullable=False)
+    category = Column(String, nullable=False)  # 'HOLIDAY', 'CLASS_CHANGE', 'EXAM', 'GENERAL'
+    description = Column(String, nullable=False)
+    effective_date = Column(String, nullable=True)  # e.g. "2026-11-25" or "Tomorrow 4 PM"
+    batch_grade = Column(String, default="All")
+    created_by = Column(String, nullable=True)
+    created_at = Column(DateTime, default=get_ist_now)
+
+    institute = relationship("Institute", back_populates="announcements")
+
+
+class TimetableSlot(Base):
+    __tablename__ = "timetable_slots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    institute_id = Column(Integer, ForeignKey("institutes.id"), index=True, nullable=False)
+    day = Column(String, nullable=False)  # 'Monday', 'Tuesday', etc.
+    subject = Column(String, nullable=False)
+    time_slot = Column(String, nullable=False)  # e.g. "04:00 PM - 05:30 PM"
+    teacher = Column(String, nullable=True)
+    room = Column(String, nullable=True)
+    grade = Column(String, default="All")
+    created_at = Column(DateTime, default=get_ist_now)
+
+    institute = relationship("Institute", back_populates="timetable_slots")
+
+
+class Test(Base):
+    __tablename__ = "tests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    institute_id = Column(Integer, ForeignKey("institutes.id"), index=True, nullable=False)
+    name = Column(String, nullable=False)  # e.g. "Test 1 - Basics", "Test 2 - Advanced"
+    subject = Column(String, nullable=False)
+    test_date = Column(DateTime, default=get_ist_now)
+    max_marks = Column(Integer, default=100)
+    grade = Column(String, default="All")
+    created_at = Column(DateTime, default=get_ist_now)
+
+    institute = relationship("Institute", back_populates="tests")
+    scores = relationship("TestScore", back_populates="test", cascade="all, delete-orphan")
+
+
+class TestScore(Base):
+    __tablename__ = "test_scores"
+
+    id = Column(Integer, primary_key=True, index=True)
+    test_id = Column(Integer, ForeignKey("tests.id", ondelete="CASCADE"), index=True, nullable=False)
+    student_id = Column(String, index=True, nullable=False)
+    marks_obtained = Column(Integer, nullable=False)
+    percentage = Column(Integer, nullable=False)  # percentage integer 0-100
+    remarks = Column(String, nullable=True)
+    created_at = Column(DateTime, default=get_ist_now)
+
+    test = relationship("Test", back_populates="scores")
 
 
 def init_db():
@@ -91,6 +173,8 @@ def init_db():
         ],
         "attendance_records": [
             ("institute_id", "INTEGER DEFAULT 1"),
+            ("reason", "VARCHAR"),
+            ("is_early_exit", "BOOLEAN DEFAULT 0" if is_sqlite else "BOOLEAN DEFAULT FALSE"),
         ],
     }
 

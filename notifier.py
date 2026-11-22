@@ -91,3 +91,54 @@ def send_expo_push_notification(
     except Exception as e:
         logger.error("Failed to send Expo push notification: %s", str(e))
         return False
+
+
+def send_expo_push_batch(
+    tokens: list,
+    title: str,
+    body: str,
+    data: Optional[dict] = None
+) -> int:
+    """
+    Sends push notifications in batch to multiple Expo push tokens.
+    Returns the count of successfully queued messages.
+    """
+    valid_tokens = [
+        t for t in set(tokens)
+        if t and (t.startswith("ExponentPushToken") or t.startswith("ExpoPushToken"))
+    ]
+    if not valid_tokens:
+        logger.info("No valid Expo push tokens for batch send")
+        return 0
+
+    messages = [
+        {
+            "to": token,
+            "sound": "default",
+            "title": title,
+            "body": body,
+            "channelId": "attendance-alerts",
+            "priority": "high",
+            "_displayInForeground": True,
+            "data": data or {},
+        }
+        for token in valid_tokens
+    ]
+
+    headers = {
+        "Accept": "application/json",
+        "Accept-Encoding": "gzip, deflate",
+        "Content-Type": "application/json",
+    }
+    if EXPO_ACCESS_TOKEN:
+        headers["Authorization"] = f"Bearer {EXPO_ACCESS_TOKEN}"
+
+    try:
+        response = requests.post(EXPO_PUSH_URL, json=messages, headers=headers, timeout=12)
+        res_data = response.json()
+        logger.info("Batch push notifications sent to %d devices: %s", len(valid_tokens), res_data)
+        return len(valid_tokens)
+    except Exception as e:
+        logger.error("Batch push failed: %s", str(e))
+        return 0
+
