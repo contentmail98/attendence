@@ -31,6 +31,8 @@ import {
   CalendarBadgeIcon,
   StatusCrest,
   EmptyAttendanceGraphic,
+  BackArrowIcon,
+  HomeTabIcon,
 } from './components/CustomIcons';
 
 Notifications.setNotificationHandler({
@@ -80,7 +82,7 @@ export default function App() {
   const [isRestoringSession, setIsRestoringSession] = useState(true);
 
   // User session state
-  const [roles, setRoles] = useState([]); // ['teacher'], ['parent'], or ['teacher', 'parent']
+  const [roles, setRoles] = useState([]); // ['teacher'] or ['parent']
   const [activeRole, setActiveRole] = useState('parent'); // 'parent' or 'teacher'
   const [teacherData, setTeacherData] = useState(null);
   const [students, setStudents] = useState([]);
@@ -88,17 +90,19 @@ export default function App() {
   const [instituteMeta, setInstituteMeta] = useState(null);
   const [deviceToken, setDeviceToken] = useState(null);
 
-  // Active navigation tab
-  // For Parent: 'attendance' | 'announcements' | 'timetable' | 'tests'
-  // For Teacher: 'early_out' | 'notices' | 'timetable_mgmt' | 'tests_mgmt'
-  const [parentTab, setParentTab] = useState('attendance');
-  const [teacherTab, setTeacherTab] = useState('early_out');
+  // Active navigation tab (Default to icon-based 'home')
+  // Parent Tabs: 'home' | 'attendance' | 'announcements' | 'timetable' | 'tests'
+  // Teacher Tabs: 'home' | 'early_out' | 'notices' | 'timetable_mgmt' | 'tests_mgmt'
+  const [parentTab, setParentTab] = useState('home');
+  const [teacherTab, setTeacherTab] = useState('home');
 
   // Parent Data
   const [attendanceLogs, setAttendanceLogs] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [timetableSlots, setTimetableSlots] = useState([]);
-  const [selectedTimetableDay, setSelectedTimetableDay] = useState(DAYS_OF_WEEK[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1]);
+  const [selectedTimetableDay, setSelectedTimetableDay] = useState(
+    DAYS_OF_WEEK[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1]
+  );
   const [cumulativeTests, setCumulativeTests] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -160,7 +164,7 @@ export default function App() {
         const savedSession = await AsyncStorage.getItem('@auth_session');
         if (savedSession) {
           const parsed = JSON.parse(savedSession);
-          const { instituteCode: savedCode, phone: savedPhone, activeRole: savedRole, selectedStudentId } = parsed;
+          const { instituteCode: savedCode, phone: savedPhone, selectedStudentId } = parsed;
           if (savedCode && savedPhone) {
             setInstituteCode(savedCode);
             setPhone(savedPhone);
@@ -177,25 +181,24 @@ export default function App() {
 
             if (res.ok) {
               const data = await res.json();
+              const isTeacher = data.roles?.includes('teacher');
+              const roleToSet = isTeacher ? 'teacher' : 'parent';
+
               setRoles(data.roles || ['parent']);
+              setActiveRole(roleToSet);
               setInstituteMeta(data.institute);
               setTeacherData(data.teacher || null);
               setStudents(data.students || []);
 
-              const roleToSet = savedRole && data.roles?.includes(savedRole) ? savedRole : (data.primary_role || 'parent');
-              setActiveRole(roleToSet);
-
-              if (Array.isArray(data.students) && data.students.length > 0) {
+              if (roleToSet === 'teacher') {
+                loadTeacherData(savedCode);
+              } else if (Array.isArray(data.students) && data.students.length > 0) {
                 const matched = selectedStudentId
                   ? data.students.find((s) => s.student_id === selectedStudentId)
                   : data.students[0];
                 const active = matched || data.students[0];
                 setSelectedStudent(active);
                 loadStudentData(active.student_id, savedCode);
-              }
-
-              if (roleToSet === 'teacher' || data.roles?.includes('teacher')) {
-                loadTeacherData(savedCode);
               }
 
               setIsLoggedIn(true);
@@ -275,12 +278,16 @@ export default function App() {
               Vibration.vibrate([0, 500, 200, 500]);
               await Notifications.scheduleNotificationAsync({
                 content: {
-                  title: latest.is_early_exit ? '🚨 Early Departure Recorded' : (isEntry ? 'Student Check-In Verified' : 'Student Check-Out Verified'),
+                  title: latest.is_early_exit
+                    ? '🚨 Early Departure Recorded'
+                    : isEntry
+                    ? 'Student Check-In Verified'
+                    : 'Student Check-Out Verified',
                   body: latest.is_early_exit
                     ? `${selectedStudent.name} left early. Reason: ${latest.reason || 'Not specified'}.`
-                    : (isEntry
-                      ? `${selectedStudent.name} entered ${selectedStudent.institute_name || 'Center'}.`
-                      : `${selectedStudent.name} has left the center.`),
+                    : isEntry
+                    ? `${selectedStudent.name} entered ${selectedStudent.institute_name || 'Center'}.`
+                    : `${selectedStudent.name} has left the center.`,
                   sound: 'default',
                   channelId: 'attendance-alerts',
                   priority: Notifications.AndroidNotificationPriority.MAX,
@@ -382,23 +389,26 @@ export default function App() {
 
       const data = await res.json();
       const userRoles = data.roles || ['parent'];
+      const isTeacher = userRoles.includes('teacher');
+      const chosenRole = isTeacher ? 'teacher' : 'parent';
+
       setRoles(userRoles);
+      setActiveRole(chosenRole);
       setInstituteMeta(data.institute);
       setTeacherData(data.teacher || null);
       setStudents(data.students || []);
 
-      const chosenRole = userRoles.includes('teacher') ? 'teacher' : 'parent';
-      setActiveRole(chosenRole);
+      // Reset tabs to icon-based home
+      setParentTab('home');
+      setTeacherTab('home');
 
       let firstStudent = null;
-      if (Array.isArray(data.students) && data.students.length > 0) {
+      if (chosenRole === 'teacher') {
+        loadTeacherData(cleanCode);
+      } else if (Array.isArray(data.students) && data.students.length > 0) {
         firstStudent = data.students[0];
         setSelectedStudent(firstStudent);
         loadStudentData(firstStudent.student_id, cleanCode);
-      }
-
-      if (userRoles.includes('teacher')) {
-        loadTeacherData(cleanCode);
       }
 
       setIsLoggedIn(true);
@@ -438,25 +448,8 @@ export default function App() {
     setAnnouncements([]);
     setTimetableSlots([]);
     setCumulativeTests(null);
-  };
-
-  // Switch role between Teacher Mode and Parent Mode
-  const switchRole = async (newRole) => {
-    setActiveRole(newRole);
-    try {
-      const savedSession = await AsyncStorage.getItem('@auth_session');
-      if (savedSession) {
-        const parsed = JSON.parse(savedSession);
-        parsed.activeRole = newRole;
-        await AsyncStorage.setItem('@auth_session', JSON.stringify(parsed));
-      }
-    } catch (e) {}
-
-    if (newRole === 'teacher') {
-      loadTeacherData(instituteCode);
-    } else if (selectedStudent) {
-      loadStudentData(selectedStudent.student_id, instituteCode);
-    }
+    setParentTab('home');
+    setTeacherTab('home');
   };
 
   // Load all student/parent dashboard data
@@ -613,7 +606,6 @@ export default function App() {
   };
 
   // --- TEACHER ACTIONS ---
-  // 1. Submit Early Out
   const handleEarlyOutSubmit = async () => {
     if (!earlyOutStudentId) {
       Alert.alert('Required', 'Please select a student.');
@@ -643,10 +635,9 @@ export default function App() {
       );
 
       if (!res.ok) throw new Error('Failed to record early exit.');
-      const data = await res.json();
       Alert.alert(
         'Early Exit Recorded',
-        `Early exit marked for student #${earlyOutStudentId}. Push notification sent to the parent instantly!`
+        `Early exit marked for student #${earlyOutStudentId}. Push notification delivered to parent instantly!`
       );
       setEarlyOutNotes('');
     } catch (e) {
@@ -656,7 +647,6 @@ export default function App() {
     }
   };
 
-  // 2. Submit Announcement / Holiday
   const handleAnnouncementSubmit = async () => {
     if (!annTitle.trim() || !annDesc.trim()) {
       Alert.alert('Required', 'Please enter Title and Description.');
@@ -686,7 +676,7 @@ export default function App() {
       if (!res.ok) throw new Error('Failed to post announcement.');
       const data = await res.json();
       Alert.alert(
-        'Announcement Broadcasted',
+        'Notice Broadcasted',
         `Notice posted and push notification sent to ${data.notified_count || 'all'} registered parent devices!`
       );
       setAnnTitle('');
@@ -700,7 +690,6 @@ export default function App() {
     }
   };
 
-  // 3. Delete Announcement
   const handleDeleteAnnouncement = async (annId) => {
     Alert.alert('Confirm Delete', 'Delete this notice?', [
       { text: 'Cancel', style: 'cancel' },
@@ -718,7 +707,6 @@ export default function App() {
     ]);
   };
 
-  // 4. Submit Timetable Slot
   const handleTimetableSubmit = async () => {
     if (!ttSubject.trim() || !ttTimeSlot.trim()) {
       Alert.alert('Required', 'Please enter Subject and Time Slot (e.g. 04:00 PM - 05:30 PM).');
@@ -758,7 +746,6 @@ export default function App() {
     }
   };
 
-  // 5. Delete Timetable Slot
   const handleDeleteTimetableSlot = async (slotId) => {
     Alert.alert('Confirm Delete', 'Delete this timetable slot?', [
       { text: 'Cancel', style: 'cancel' },
@@ -776,7 +763,6 @@ export default function App() {
     ]);
   };
 
-  // 6. Create Test
   const handleCreateTest = async () => {
     if (!newTestName.trim() || !newTestSubject.trim()) {
       Alert.alert('Required', 'Please enter Test Name and Subject.');
@@ -813,7 +799,6 @@ export default function App() {
     }
   };
 
-  // 7. Load scores for grading a specific test
   const handleSelectTestForGrading = async (test) => {
     setSelectedTestForGrading(test);
     try {
@@ -837,7 +822,6 @@ export default function App() {
     }
   };
 
-  // 8. Publish Scores & Notify Parents
   const handlePublishTestScores = async () => {
     if (!selectedTestForGrading) return;
 
@@ -1078,70 +1062,41 @@ export default function App() {
       ) : (
         /* ================= 2. AUTHENTICATED PORTALS ================= */
         <View style={styles.dashboardWrapper}>
-          {/* TOP HEADER */}
-          <View style={styles.dashboardHeader}>
-            <View style={styles.headerLeft}>
-              <View style={styles.avatarCircle}>
-                <Text style={styles.avatarInitial}>
-                  {activeRole === 'teacher'
-                    ? (teacherData?.name ? teacherData.name.charAt(0).toUpperCase() : 'T')
-                    : (selectedStudent?.name ? selectedStudent.name.charAt(0).toUpperCase() : 'S')}
-                </Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.headerStudentName} numberOfLines={1}>
-                  {activeRole === 'teacher'
-                    ? (teacherData?.name || 'Faculty Member')
-                    : (selectedStudent?.name || 'Student')}
-                </Text>
-                <Text style={styles.headerGradeText}>
-                  {instituteMeta?.name || instituteCode.toUpperCase()} • {activeRole === 'teacher' ? (teacherData?.subject || 'Teacher') : `ID: #${selectedStudent?.student_id || ''}`}
-                </Text>
-              </View>
-            </View>
-
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              {/* Sound Test */}
-              <TouchableOpacity onPress={handleTestSound} style={styles.soundBtn} activeOpacity={0.75}>
-                <ChimeIcon size={16} color="#FFFFFF" />
-              </TouchableOpacity>
-
-              {/* Logout */}
-              <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn} activeOpacity={0.75}>
-                <ExitDoorIcon size={14} color="#FFFFFF" />
-                <Text style={styles.logoutBtnText}>Logout</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* DUAL-ROLE SWITCHER PILL (If user is both Teacher and Parent) */}
-          {roles.length > 1 && (
-            <View style={styles.roleSwitcherBar}>
-              <TouchableOpacity
-                style={[styles.roleSwitchBtn, activeRole === 'teacher' && styles.roleSwitchBtnActive]}
-                onPress={() => switchRole('teacher')}
-              >
-                <Text style={[styles.roleSwitchText, activeRole === 'teacher' && styles.roleSwitchTextActive]}>
-                  👨‍🏫 Teacher Mode
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.roleSwitchBtn, activeRole === 'parent' && styles.roleSwitchBtnActive]}
-                onPress={() => switchRole('parent')}
-              >
-                <Text style={[styles.roleSwitchText, activeRole === 'parent' && styles.roleSwitchTextActive]}>
-                  👨‍👩‍👧 Parent Mode
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
           {/* ============================================================ */}
           {/* ==================== A. PARENT PORTAL ==================== */}
           {/* ============================================================ */}
           {activeRole === 'parent' && (
             <View style={{ flex: 1 }}>
-              {/* Student selector tabs if multiple children enrolled */}
+              {/* TOP HEADER */}
+              <View style={styles.dashboardHeader}>
+                <View style={styles.headerLeft}>
+                  <View style={styles.avatarCircle}>
+                    <Text style={styles.avatarInitial}>
+                      {selectedStudent?.name ? selectedStudent.name.charAt(0).toUpperCase() : 'S'}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.headerStudentName} numberOfLines={1}>
+                      {selectedStudent?.name || 'Student'}
+                    </Text>
+                    <Text style={styles.headerGradeText}>
+                      {instituteMeta?.name || instituteCode.toUpperCase()} • ID: #{selectedStudent?.student_id || ''}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <TouchableOpacity onPress={handleTestSound} style={styles.soundBtn} activeOpacity={0.75}>
+                    <ChimeIcon size={16} color="#FFFFFF" />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn} activeOpacity={0.75}>
+                    <ExitDoorIcon size={14} color="#FFFFFF" />
+                    <Text style={styles.logoutBtnText}>Logout</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Multi-student selector tabs */}
               {students.length > 1 && (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsScroll}>
                   {students.map((s) => (
@@ -1161,49 +1116,157 @@ export default function App() {
                 </ScrollView>
               )}
 
-              {/* Feature Navigation Tabs */}
-              <View style={styles.featureTabBar}>
-                <TouchableOpacity
-                  style={[styles.featureTabItem, parentTab === 'attendance' && styles.featureTabItemActive]}
-                  onPress={() => setParentTab('attendance')}
-                >
-                  <Text style={[styles.featureTabText, parentTab === 'attendance' && styles.featureTabTextActive]}>
-                    Attendance
+              {/* FEATURE SCREEN SUB-HEADER (When inside a specific feature view) */}
+              {parentTab !== 'home' && (
+                <View style={styles.featureTopNav}>
+                  <TouchableOpacity
+                    style={styles.backBtn}
+                    onPress={() => setParentTab('home')}
+                    activeOpacity={0.75}
+                  >
+                    <BackArrowIcon size={16} color="#4338CA" />
+                    <Text style={styles.backBtnText}>Dashboard</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.featureTopNavTitle}>
+                    {parentTab === 'attendance' && 'Attendance Logs'}
+                    {parentTab === 'announcements' && 'Notices & Holidays'}
+                    {parentTab === 'timetable' && 'Class Timetable'}
+                    {parentTab === 'tests' && 'Tests & Cumulative'}
                   </Text>
-                </TouchableOpacity>
+                  <View style={{ width: 60 }} />
+                </View>
+              )}
 
-                <TouchableOpacity
-                  style={[styles.featureTabItem, parentTab === 'announcements' && styles.featureTabItemActive]}
-                  onPress={() => setParentTab('announcements')}
+              {/* ================= PARENT TAB: HOME (ICON-BASED DASHBOARD) ================= */}
+              {parentTab === 'home' && (
+                <ScrollView
+                  contentContainerStyle={styles.homeScrollContent}
+                  refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#4F46E5']} />}
                 >
-                  <Text style={[styles.featureTabText, parentTab === 'announcements' && styles.featureTabTextActive]}>
-                    Notices ({announcements.length})
-                  </Text>
-                </TouchableOpacity>
+                  {/* Today's Status Banner Card */}
+                  <View style={styles.todayCard}>
+                    <View style={styles.todayCardContent}>
+                      <Text style={styles.todayCardLabel}>TODAY'S BIOMETRIC STATUS</Text>
+                      <View style={styles.todayStatusRow}>
+                        <View
+                          style={[
+                            styles.statusDot,
+                            todayLatest
+                              ? todayLatest.is_early_exit
+                                ? styles.dotAmber
+                                : todayLatest.punch_type === 'ENTRY'
+                                ? styles.dotGreen
+                                : styles.dotRed
+                              : styles.dotGray,
+                          ]}
+                        />
+                        <Text style={styles.todayStatusText}>
+                          {todayLatest
+                            ? todayLatest.is_early_exit
+                              ? 'Left Early'
+                              : todayLatest.punch_type === 'ENTRY'
+                              ? 'Currently IN Center'
+                              : 'Checked OUT'
+                            : 'No Punches Today'}
+                        </Text>
+                      </View>
+                      <Text style={styles.todaySubText}>
+                        {todayLatest
+                          ? `Last punch at ${new Date(todayLatest.punch_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • ${todayLatest.device_name || 'Biometric Scanner'}`
+                          : 'Awaiting biometric gate check-in'}
+                      </Text>
+                    </View>
+                    <View style={styles.todayBadge}>
+                      <StatusCrest status={todayLatest ? todayLatest.punch_type : 'NONE'} size={40} />
+                    </View>
+                  </View>
 
-                <TouchableOpacity
-                  style={[styles.featureTabItem, parentTab === 'timetable' && styles.featureTabItemActive]}
-                  onPress={() => setParentTab('timetable')}
-                >
-                  <Text style={[styles.featureTabText, parentTab === 'timetable' && styles.featureTabTextActive]}>
-                    Timetable
-                  </Text>
-                </TouchableOpacity>
+                  {/* Section Title */}
+                  <View style={styles.sectionHeaderRow}>
+                    <Text style={styles.homeSectionTitle}>Institute Services</Text>
+                    <Text style={styles.homeSectionSubtitle}>Tap an icon to explore</Text>
+                  </View>
 
-                <TouchableOpacity
-                  style={[styles.featureTabItem, parentTab === 'tests' && styles.featureTabItemActive]}
-                  onPress={() => setParentTab('tests')}
-                >
-                  <Text style={[styles.featureTabText, parentTab === 'tests' && styles.featureTabTextActive]}>
-                    Tests & Track
-                  </Text>
-                </TouchableOpacity>
-              </View>
+                  {/* 2x2 ICON GRID */}
+                  <View style={styles.iconGridContainer}>
+                    {/* Tile 1: Attendance History */}
+                    <TouchableOpacity
+                      style={styles.gridTile}
+                      onPress={() => setParentTab('attendance')}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[styles.tileIconContainer, { backgroundColor: '#EEF2FF' }]}>
+                        <Text style={styles.tileEmoji}>📅</Text>
+                      </View>
+                      <View style={styles.tilePillRow}>
+                        <Text style={styles.tileBadgeGreen}>LIVE SYNC</Text>
+                      </View>
+                      <Text style={styles.tileTitle}>Attendance</Text>
+                      <Text style={styles.tileSubtitle}>Punch history & early exits</Text>
+                      <Text style={[styles.tileActionLink, { color: '#4F46E5' }]}>View Logs ›</Text>
+                    </TouchableOpacity>
 
-              {/* TAB 1: ATTENDANCE PUNCHES */}
+                    {/* Tile 2: Notices & Holidays */}
+                    <TouchableOpacity
+                      style={styles.gridTile}
+                      onPress={() => setParentTab('announcements')}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[styles.tileIconContainer, { backgroundColor: '#FEF3C7' }]}>
+                        <Text style={styles.tileEmoji}>📢</Text>
+                      </View>
+                      <View style={styles.tilePillRow}>
+                        <Text style={styles.tileBadgeAmber}>{announcements.length} Active</Text>
+                      </View>
+                      <Text style={styles.tileTitle}>Notice Board</Text>
+                      <Text style={styles.tileSubtitle}>Holidays & rescheduled classes</Text>
+                      <Text style={[styles.tileActionLink, { color: '#D97706' }]}>Open Board ›</Text>
+                    </TouchableOpacity>
+
+                    {/* Tile 3: Weekly Timetable */}
+                    <TouchableOpacity
+                      style={styles.gridTile}
+                      onPress={() => setParentTab('timetable')}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[styles.tileIconContainer, { backgroundColor: '#E0F2FE' }]}>
+                        <Text style={styles.tileEmoji}>🗓️</Text>
+                      </View>
+                      <View style={styles.tilePillRow}>
+                        <Text style={styles.tileBadgeBlue}>Mon – Sun</Text>
+                      </View>
+                      <Text style={styles.tileTitle}>Timetable</Text>
+                      <Text style={styles.tileSubtitle}>Weekly class routine & faculty</Text>
+                      <Text style={[styles.tileActionLink, { color: '#0284C7' }]}>Check Routine ›</Text>
+                    </TouchableOpacity>
+
+                    {/* Tile 4: Test Results & Cumulative Tracking */}
+                    <TouchableOpacity
+                      style={styles.gridTile}
+                      onPress={() => setParentTab('tests')}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[styles.tileIconContainer, { backgroundColor: '#DCFCE7' }]}>
+                        <Text style={styles.tileEmoji}>📈</Text>
+                      </View>
+                      <View style={styles.tilePillRow}>
+                        <Text style={styles.tileBadgeEmerald}>
+                          {cumulativeTests?.overall_improvement !== undefined
+                            ? `${cumulativeTests.overall_improvement >= 0 ? '+' : ''}${cumulativeTests.overall_improvement}%`
+                            : 'Track'}
+                        </Text>
+                      </View>
+                      <Text style={styles.tileTitle}>Test Results</Text>
+                      <Text style={styles.tileSubtitle}>Scores & cumulative progress</Text>
+                      <Text style={[styles.tileActionLink, { color: '#059669' }]}>View Scores ›</Text>
+                    </TouchableOpacity>
+                  </View>
+                </ScrollView>
+              )}
+
+              {/* ================= PARENT TAB: ATTENDANCE LOGS ================= */}
               {parentTab === 'attendance' && (
                 <View style={{ flex: 1 }}>
-                  {/* Live sync & refresh */}
                   <View style={styles.liveStatusBar}>
                     <View style={styles.liveIndicatorRow}>
                       <View style={styles.livePulseDot} />
@@ -1219,41 +1282,6 @@ export default function App() {
                     </TouchableOpacity>
                   </View>
 
-                  {/* Today's Status Card */}
-                  <View style={styles.todayCard}>
-                    <View style={styles.todayCardContent}>
-                      <Text style={styles.todayCardLabel}>TODAY'S STATUS</Text>
-                      <View style={styles.todayStatusRow}>
-                        <View
-                          style={[
-                            styles.statusDot,
-                            todayLatest
-                              ? todayLatest.punch_type === 'ENTRY'
-                                ? styles.dotGreen
-                                : styles.dotRed
-                              : styles.dotGray,
-                          ]}
-                        />
-                        <Text style={styles.todayStatusText}>
-                          {todayLatest
-                            ? todayLatest.is_early_exit
-                              ? 'Left Early'
-                              : (todayLatest.punch_type === 'ENTRY' ? 'Currently IN' : 'Checked OUT')
-                            : 'No Activity Today'}
-                        </Text>
-                      </View>
-                      <Text style={styles.todaySubText}>
-                        {todayLatest
-                          ? `Last punch at ${new Date(todayLatest.punch_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • ${todayLatest.device_name || 'Biometric Gate'}`
-                          : 'Waiting for biometric scanner event'}
-                      </Text>
-                    </View>
-                    <View style={styles.todayBadge}>
-                      <StatusCrest status={todayLatest ? todayLatest.punch_type : 'NONE'} size={40} />
-                    </View>
-                  </View>
-
-                  {/* Attendance Log List */}
                   <FlatList
                     data={attendanceLogs}
                     keyExtractor={(item) => item.id.toString()}
@@ -1264,14 +1292,14 @@ export default function App() {
                       <View style={styles.emptyState}>
                         <EmptyAttendanceGraphic size={56} />
                         <Text style={styles.emptyTitle}>No Attendance Records Found</Text>
-                        <Text style={styles.emptyDesc}>Logs will appear here instantly when {selectedStudent?.name} punches at the center.</Text>
+                        <Text style={styles.emptyDesc}>Logs appear here immediately when {selectedStudent?.name} punches at the center.</Text>
                       </View>
                     }
                   />
                 </View>
               )}
 
-              {/* TAB 2: ANNOUNCEMENTS & HOLIDAYS */}
+              {/* ================= PARENT TAB: ANNOUNCEMENTS & HOLIDAYS ================= */}
               {parentTab === 'announcements' && (
                 <FlatList
                   data={announcements}
@@ -1323,10 +1351,9 @@ export default function App() {
                 />
               )}
 
-              {/* TAB 3: WEEKLY TIMETABLE */}
+              {/* ================= PARENT TAB: WEEKLY TIMETABLE ================= */}
               {parentTab === 'timetable' && (
                 <View style={{ flex: 1 }}>
-                  {/* Day Selector Pills */}
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.daySelectorScroll}>
                     {DAYS_OF_WEEK.map((d) => (
                       <TouchableOpacity
@@ -1378,7 +1405,7 @@ export default function App() {
                 </View>
               )}
 
-              {/* TAB 4: TEST RESULTS & CUMULATIVE TRACKING */}
+              {/* ================= PARENT TAB: TESTS & CUMULATIVE TRACKING ================= */}
               {parentTab === 'tests' && (
                 <ScrollView
                   contentContainerStyle={styles.listContent}
@@ -1484,6 +1511,54 @@ export default function App() {
                   )}
                 </ScrollView>
               )}
+
+              {/* PARENT BOTTOM NAVIGATION BAR */}
+              <View style={styles.bottomNav}>
+                <TouchableOpacity
+                  style={styles.navItem}
+                  onPress={() => setParentTab('home')}
+                  activeOpacity={0.7}
+                >
+                  <HomeTabIcon size={20} color={parentTab === 'home' ? '#4F46E5' : '#94A3B8'} />
+                  <Text style={[styles.navText, parentTab === 'home' && styles.navTextActive]}>Home</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.navItem}
+                  onPress={() => setParentTab('attendance')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.navEmoji, parentTab === 'attendance' && styles.navEmojiActive]}>📅</Text>
+                  <Text style={[styles.navText, parentTab === 'attendance' && styles.navTextActive]}>Punches</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.navItem}
+                  onPress={() => setParentTab('announcements')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.navEmoji, parentTab === 'announcements' && styles.navEmojiActive]}>📢</Text>
+                  <Text style={[styles.navText, parentTab === 'announcements' && styles.navTextActive]}>Notices</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.navItem}
+                  onPress={() => setParentTab('timetable')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.navEmoji, parentTab === 'timetable' && styles.navEmojiActive]}>🗓️</Text>
+                  <Text style={[styles.navText, parentTab === 'timetable' && styles.navTextActive]}>Routine</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.navItem}
+                  onPress={() => setParentTab('tests')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.navEmoji, parentTab === 'tests' && styles.navEmojiActive]}>📈</Text>
+                  <Text style={[styles.navText, parentTab === 'tests' && styles.navTextActive]}>Tests</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
 
@@ -1492,46 +1567,170 @@ export default function App() {
           {/* ============================================================ */}
           {activeRole === 'teacher' && (
             <View style={{ flex: 1 }}>
-              {/* Feature Navigation Tabs for Teacher */}
-              <View style={styles.featureTabBar}>
-                <TouchableOpacity
-                  style={[styles.featureTabItem, teacherTab === 'early_out' && styles.featureTabItemActive]}
-                  onPress={() => setTeacherTab('early_out')}
-                >
-                  <Text style={[styles.featureTabText, teacherTab === 'early_out' && styles.featureTabTextActive]}>
-                    Early Exit
-                  </Text>
-                </TouchableOpacity>
+              {/* TOP HEADER (NO PARENT VIEW SWITCHER) */}
+              <View style={styles.dashboardHeader}>
+                <View style={styles.headerLeft}>
+                  <View style={[styles.avatarCircle, { backgroundColor: '#EDE9FE' }]}>
+                    <Text style={[styles.avatarInitial, { color: '#6D28D9' }]}>
+                      {teacherData?.name ? teacherData.name.charAt(0).toUpperCase() : 'T'}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.headerStudentName} numberOfLines={1}>
+                      {teacherData?.name || 'Faculty Member'}
+                    </Text>
+                    <Text style={styles.headerGradeText}>
+                      {instituteMeta?.name || instituteCode.toUpperCase()} • {teacherData?.subject || 'Teacher'}
+                    </Text>
+                  </View>
+                </View>
 
-                <TouchableOpacity
-                  style={[styles.featureTabItem, teacherTab === 'notices' && styles.featureTabItemActive]}
-                  onPress={() => setTeacherTab('notices')}
-                >
-                  <Text style={[styles.featureTabText, teacherTab === 'notices' && styles.featureTabTextActive]}>
-                    Declare Notice
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.featureTabItem, teacherTab === 'timetable_mgmt' && styles.featureTabItemActive]}
-                  onPress={() => setTeacherTab('timetable_mgmt')}
-                >
-                  <Text style={[styles.featureTabText, teacherTab === 'timetable_mgmt' && styles.featureTabTextActive]}>
-                    Timetable
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.featureTabItem, teacherTab === 'tests_mgmt' && styles.featureTabItemActive]}
-                  onPress={() => setTeacherTab('tests_mgmt')}
-                >
-                  <Text style={[styles.featureTabText, teacherTab === 'tests_mgmt' && styles.featureTabTextActive]}>
-                    Grade Tests
-                  </Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <TouchableOpacity onPress={handleTestSound} style={styles.soundBtn} activeOpacity={0.75}>
+                    <ChimeIcon size={16} color="#FFFFFF" />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn} activeOpacity={0.75}>
+                    <ExitDoorIcon size={14} color="#FFFFFF" />
+                    <Text style={styles.logoutBtnText}>Logout</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
-              {/* TEACHER TAB 1: EARLY OUT LOGGING */}
+              {/* TEACHER SUB-HEADER (When inside a specific tool) */}
+              {teacherTab !== 'home' && (
+                <View style={styles.featureTopNav}>
+                  <TouchableOpacity
+                    style={styles.backBtn}
+                    onPress={() => setTeacherTab('home')}
+                    activeOpacity={0.75}
+                  >
+                    <BackArrowIcon size={16} color="#4338CA" />
+                    <Text style={styles.backBtnText}>Dashboard</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.featureTopNavTitle}>
+                    {teacherTab === 'early_out' && 'Early Departure'}
+                    {teacherTab === 'notices' && 'Broadcast Notice'}
+                    {teacherTab === 'timetable_mgmt' && 'Timetable Manager'}
+                    {teacherTab === 'tests_mgmt' && 'Grade Tests'}
+                  </Text>
+                  <View style={{ width: 60 }} />
+                </View>
+              )}
+
+              {/* ================= TEACHER TAB: HOME (ICON-BASED DASHBOARD) ================= */}
+              {teacherTab === 'home' && (
+                <ScrollView
+                  contentContainerStyle={styles.homeScrollContent}
+                  refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#4F46E5']} />}
+                >
+                  {/* Faculty Overview Card */}
+                  <View style={styles.teacherOverviewCard}>
+                    <Text style={styles.teacherOverviewTitle}>👨‍🏫 Faculty Control Center</Text>
+                    <Text style={styles.teacherOverviewSub}>
+                      Manage student attendance, broadcast notices, configure routine, and grade tests.
+                    </Text>
+
+                    {/* Quick Stats Grid */}
+                    <View style={styles.teacherStatsGrid}>
+                      <View style={styles.teacherStatItem}>
+                        <Text style={styles.teacherStatVal}>{allStudents.length}</Text>
+                        <Text style={styles.teacherStatLbl}>Students</Text>
+                      </View>
+                      <View style={styles.teacherStatItem}>
+                        <Text style={styles.teacherStatVal}>{announcements.length}</Text>
+                        <Text style={styles.teacherStatLbl}>Notices</Text>
+                      </View>
+                      <View style={styles.teacherStatItem}>
+                        <Text style={styles.teacherStatVal}>{timetableSlots.length}</Text>
+                        <Text style={styles.teacherStatLbl}>Classes</Text>
+                      </View>
+                      <View style={styles.teacherStatItem}>
+                        <Text style={styles.teacherStatVal}>{teacherTests.length}</Text>
+                        <Text style={styles.teacherStatLbl}>Tests</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Section Title */}
+                  <View style={styles.sectionHeaderRow}>
+                    <Text style={styles.homeSectionTitle}>Teacher Services</Text>
+                    <Text style={styles.homeSectionSubtitle}>Select an action below</Text>
+                  </View>
+
+                  {/* 2x2 TEACHER ICON GRID */}
+                  <View style={styles.iconGridContainer}>
+                    {/* Tile 1: Early Exit */}
+                    <TouchableOpacity
+                      style={styles.gridTile}
+                      onPress={() => setTeacherTab('early_out')}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[styles.tileIconContainer, { backgroundColor: '#FEE2E2' }]}>
+                        <Text style={styles.tileEmoji}>🚨</Text>
+                      </View>
+                      <View style={styles.tilePillRow}>
+                        <Text style={styles.tileBadgeRed}>Instant Alert</Text>
+                      </View>
+                      <Text style={styles.tileTitle}>Early Exit Log</Text>
+                      <Text style={styles.tileSubtitle}>Mark student out & alert parent</Text>
+                      <Text style={[styles.tileActionLink, { color: '#DC2626' }]}>Record Exit ›</Text>
+                    </TouchableOpacity>
+
+                    {/* Tile 2: Declare Notice */}
+                    <TouchableOpacity
+                      style={styles.gridTile}
+                      onPress={() => setTeacherTab('notices')}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[styles.tileIconContainer, { backgroundColor: '#FEF3C7' }]}>
+                        <Text style={styles.tileEmoji}>📢</Text>
+                      </View>
+                      <View style={styles.tilePillRow}>
+                        <Text style={styles.tileBadgeAmber}>Broadcast</Text>
+                      </View>
+                      <Text style={styles.tileTitle}>Declare Notice</Text>
+                      <Text style={styles.tileSubtitle}>Broadcast holiday & reschedule</Text>
+                      <Text style={[styles.tileActionLink, { color: '#D97706' }]}>Post Notice ›</Text>
+                    </TouchableOpacity>
+
+                    {/* Tile 3: Timetable Manager */}
+                    <TouchableOpacity
+                      style={styles.gridTile}
+                      onPress={() => setTeacherTab('timetable_mgmt')}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[styles.tileIconContainer, { backgroundColor: '#E0F2FE' }]}>
+                        <Text style={styles.tileEmoji}>🗓️</Text>
+                      </View>
+                      <View style={styles.tilePillRow}>
+                        <Text style={styles.tileBadgeBlue}>Schedule</Text>
+                      </View>
+                      <Text style={styles.tileTitle}>Timetable</Text>
+                      <Text style={styles.tileSubtitle}>Set weekly routine Mon–Sun</Text>
+                      <Text style={[styles.tileActionLink, { color: '#0284C7' }]}>Manage Routine ›</Text>
+                    </TouchableOpacity>
+
+                    {/* Tile 4: Tests & Grading */}
+                    <TouchableOpacity
+                      style={styles.gridTile}
+                      onPress={() => setTeacherTab('tests_mgmt')}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[styles.tileIconContainer, { backgroundColor: '#EDE9FE' }]}>
+                        <Text style={styles.tileEmoji}>📝</Text>
+                      </View>
+                      <View style={styles.tilePillRow}>
+                        <Text style={styles.tileBadgePurple}>Marks Entry</Text>
+                      </View>
+                      <Text style={styles.tileTitle}>Grade Tests</Text>
+                      <Text style={styles.tileSubtitle}>Input marks & notify parents</Text>
+                      <Text style={[styles.tileActionLink, { color: '#7C3AED' }]}>Grade Now ›</Text>
+                    </TouchableOpacity>
+                  </View>
+                </ScrollView>
+              )}
+
+              {/* ================= TEACHER TAB: EARLY EXIT LOGGING ================= */}
               {teacherTab === 'early_out' && (
                 <ScrollView contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled">
                   <View style={styles.formCard}>
@@ -1540,7 +1739,6 @@ export default function App() {
                       Records an early exit punch in the database and immediately delivers a high-priority push notification to the parent's phone.
                     </Text>
 
-                    {/* Student Selector */}
                     <Text style={styles.formLabel}>SELECT STUDENT</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
                       {allStudents.map((s) => (
@@ -1556,7 +1754,6 @@ export default function App() {
                       ))}
                     </ScrollView>
 
-                    {/* Common Reason Quick Chips */}
                     <Text style={styles.formLabel}>SELECT REASON</Text>
                     <View style={styles.chipRow}>
                       {['Medical / Sick', 'Family Emergency', 'Doctor Appointment', 'Special Permission'].map((r) => (
@@ -1572,7 +1769,6 @@ export default function App() {
                       ))}
                     </View>
 
-                    {/* Custom Reason Input */}
                     <Text style={[styles.formLabel, { marginTop: 12 }]}>OR CUSTOM REASON</Text>
                     <TextInput
                       style={styles.textInputFull}
@@ -1581,11 +1777,10 @@ export default function App() {
                       onChangeText={setEarlyOutReason}
                     />
 
-                    {/* Additional Notes */}
                     <Text style={[styles.formLabel, { marginTop: 12 }]}>INTERNAL NOTES (OPTIONAL)</Text>
                     <TextInput
                       style={[styles.textInputFull, { height: 70, textAlignVertical: 'top' }]}
-                      placeholder="e.g. Left with father Mr. Das after verification"
+                      placeholder="e.g. Left with father after phone verification"
                       multiline
                       value={earlyOutNotes}
                       onChangeText={setEarlyOutNotes}
@@ -1606,7 +1801,7 @@ export default function App() {
                 </ScrollView>
               )}
 
-              {/* TEACHER TAB 2: DECLARE HOLIDAY / CLASS RESCHEDULE */}
+              {/* ================= TEACHER TAB: DECLARE NOTICE OR HOLIDAY ================= */}
               {teacherTab === 'notices' && (
                 <ScrollView contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled">
                   <View style={styles.formCard}>
@@ -1615,7 +1810,6 @@ export default function App() {
                       Posts to the parent notice board and sends a push notification to every registered parent.
                     </Text>
 
-                    {/* Category Selector */}
                     <Text style={styles.formLabel}>CATEGORY</Text>
                     <View style={styles.chipRow}>
                       {[
@@ -1674,7 +1868,6 @@ export default function App() {
                     </TouchableOpacity>
                   </View>
 
-                  {/* Active Announcements List with Delete */}
                   <Text style={[styles.sectionHeading, { marginTop: 20, marginBottom: 8 }]}>Active Notices</Text>
                   {announcements.map((item) => (
                     <View key={item.id} style={styles.announcementCard}>
@@ -1694,7 +1887,7 @@ export default function App() {
                 </ScrollView>
               )}
 
-              {/* TEACHER TAB 3: TIMETABLE MANAGEMENT */}
+              {/* ================= TEACHER TAB: TIMETABLE MANAGEMENT ================= */}
               {teacherTab === 'timetable_mgmt' && (
                 <ScrollView contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled">
                   <View style={styles.formCard}>
@@ -1759,7 +1952,6 @@ export default function App() {
                     </TouchableOpacity>
                   </View>
 
-                  {/* Scheduled Slots */}
                   <Text style={[styles.sectionHeading, { marginTop: 20, marginBottom: 8 }]}>Current Routine</Text>
                   {timetableSlots.map((slot) => (
                     <View key={slot.id} style={styles.timetableCard}>
@@ -1779,11 +1971,10 @@ export default function App() {
                 </ScrollView>
               )}
 
-              {/* TEACHER TAB 4: TESTS & GRADING */}
+              {/* ================= TEACHER TAB: TESTS & GRADING ================= */}
               {teacherTab === 'tests_mgmt' && (
                 <ScrollView contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled">
                   {selectedTestForGrading ? (
-                    /* GRADING MODAL VIEW */
                     <View style={styles.formCard}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Text style={styles.formCardTitle}>Grading: {selectedTestForGrading.name}</Text>
@@ -1832,7 +2023,6 @@ export default function App() {
                       </TouchableOpacity>
                     </View>
                   ) : (
-                    /* CREATE TEST & TEST LIST VIEW */
                     <View>
                       <View style={styles.formCard}>
                         <Text style={styles.formCardTitle}>📝 Create New Test</Text>
@@ -1877,7 +2067,6 @@ export default function App() {
                         </TouchableOpacity>
                       </View>
 
-                      {/* Test List */}
                       <Text style={[styles.sectionHeading, { marginTop: 20, marginBottom: 8 }]}>Tests & Cumulative History</Text>
                       {teacherTests.map((t) => (
                         <View key={t.id} style={styles.testScoreCard}>
@@ -1902,6 +2091,54 @@ export default function App() {
                   )}
                 </ScrollView>
               )}
+
+              {/* TEACHER BOTTOM NAVIGATION BAR */}
+              <View style={styles.bottomNav}>
+                <TouchableOpacity
+                  style={styles.navItem}
+                  onPress={() => setTeacherTab('home')}
+                  activeOpacity={0.7}
+                >
+                  <HomeTabIcon size={20} color={teacherTab === 'home' ? '#4F46E5' : '#94A3B8'} />
+                  <Text style={[styles.navText, teacherTab === 'home' && styles.navTextActive]}>Home</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.navItem}
+                  onPress={() => setTeacherTab('early_out')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.navEmoji, teacherTab === 'early_out' && styles.navEmojiActive]}>🚨</Text>
+                  <Text style={[styles.navText, teacherTab === 'early_out' && styles.navTextActive]}>Early Exit</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.navItem}
+                  onPress={() => setTeacherTab('notices')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.navEmoji, teacherTab === 'notices' && styles.navEmojiActive]}>📢</Text>
+                  <Text style={[styles.navText, teacherTab === 'notices' && styles.navTextActive]}>Notices</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.navItem}
+                  onPress={() => setTeacherTab('timetable_mgmt')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.navEmoji, teacherTab === 'timetable_mgmt' && styles.navEmojiActive]}>🗓️</Text>
+                  <Text style={[styles.navText, teacherTab === 'timetable_mgmt' && styles.navTextActive]}>Routine</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.navItem}
+                  onPress={() => setTeacherTab('tests_mgmt')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.navEmoji, teacherTab === 'tests_mgmt' && styles.navEmojiActive]}>📝</Text>
+                  <Text style={[styles.navText, teacherTab === 'tests_mgmt' && styles.navTextActive]}>Grade</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
         </View>
@@ -2052,7 +2289,7 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
   },
 
-  /* DASHBOARD */
+  /* DASHBOARD WRAPPER & HEADER */
   dashboardWrapper: {
     flex: 1,
     backgroundColor: '#F8FAFC',
@@ -2119,37 +2356,40 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  /* ROLE SWITCHER */
-  roleSwitcherBar: {
-    backgroundColor: '#3730A3',
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    gap: 8,
-  },
-  roleSwitchBtn: {
-    flex: 1,
-    paddingVertical: 6,
-    borderRadius: 10,
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-  },
-  roleSwitchBtnActive: {
+  /* FEATURE TOP NAV BAR */
+  featureTopNav: {
     backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
   },
-  roleSwitchText: {
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EEF2FF',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+  },
+  backBtnText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#C7D2FE',
+    fontWeight: '700',
+    color: '#4338CA',
   },
-  roleSwitchTextActive: {
-    color: '#3730A3',
+  featureTopNavTitle: {
+    fontSize: 15,
     fontWeight: '800',
+    color: '#0F172A',
   },
 
-  /* TABS */
+  /* MULTI-STUDENT TABS */
   tabsScroll: {
-    backgroundColor: '#312E81',
+    backgroundColor: '#3730A3',
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
@@ -2173,35 +2413,293 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  /* FEATURE TAB BAR */
-  featureTabBar: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    paddingHorizontal: 10,
+  /* ICON-BASED HOME SCREEN */
+  homeScrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 24,
   },
-  featureTabItem: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
+  sectionHeaderRow: {
+    marginTop: 18,
+    marginBottom: 12,
   },
-  featureTabItemActive: {
-    borderBottomColor: '#4F46E5',
+  homeSectionTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
   },
-  featureTabText: {
+  homeSectionSubtitle: {
     fontSize: 12,
-    fontWeight: '600',
     color: '#64748B',
+    marginTop: 1,
   },
-  featureTabTextActive: {
+  iconGridContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  gridTile: {
+    width: '48%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+    marginBottom: 4,
+  },
+  tileIconContainer: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  tileEmoji: {
+    fontSize: 22,
+  },
+  tilePillRow: {
+    marginBottom: 6,
+  },
+  tileBadgeGreen: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#059669',
+    backgroundColor: '#DCFCE7',
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  tileBadgeAmber: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#D97706',
+    backgroundColor: '#FEF3C7',
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  tileBadgeBlue: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#0284C7',
+    backgroundColor: '#E0F2FE',
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  tileBadgeEmerald: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#059669',
+    backgroundColor: '#DCFCE7',
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  tileBadgeRed: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#DC2626',
+    backgroundColor: '#FEE2E2',
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  tileBadgePurple: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#7C3AED',
+    backgroundColor: '#EDE9FE',
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  tileTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 4,
+  },
+  tileSubtitle: {
+    fontSize: 11,
+    color: '#64748B',
+    lineHeight: 15,
+    minHeight: 30,
+  },
+  tileActionLink: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 8,
+  },
+
+  /* TEACHER OVERVIEW CARD */
+  teacherOverviewCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  teacherOverviewTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  teacherOverviewSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 3,
+    marginBottom: 14,
+    lineHeight: 16,
+  },
+  teacherStatsGrid: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  teacherStatItem: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  teacherStatVal: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#4F46E5',
+  },
+  teacherStatLbl: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+    marginTop: 2,
+  },
+
+  /* TODAY STATUS CARD */
+  todayCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    elevation: 2,
+  },
+  todayCardContent: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  todayCardLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94A3B8',
+    letterSpacing: 0.6,
+  },
+  todayStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    gap: 6,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  dotGreen: {
+    backgroundColor: '#10B981',
+  },
+  dotRed: {
+    backgroundColor: '#EF4444',
+  },
+  dotAmber: {
+    backgroundColor: '#F59E0B',
+  },
+  dotGray: {
+    backgroundColor: '#94A3B8',
+  },
+  todayStatusText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  todaySubText: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 3,
+  },
+  todayBadge: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  /* BOTTOM NAVIGATION BAR */
+  bottomNav: {
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingBottom: Platform.OS === 'ios' ? 20 : 8,
+  },
+  navItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 2,
+    flex: 1,
+  },
+  navEmoji: {
+    fontSize: 18,
+    color: '#94A3B8',
+  },
+  navEmojiActive: {
+    transform: [{ scale: 1.15 }],
+  },
+  navText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#94A3B8',
+    marginTop: 2,
+  },
+  navTextActive: {
     color: '#4F46E5',
     fontWeight: '800',
   },
 
-  /* LIVE BAR */
+  /* LIST CONTENT */
+  listContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 24,
+    paddingTop: 8,
+  },
   liveStatusBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -2242,77 +2740,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#4F46E5',
     marginLeft: 4,
-  },
-
-  /* TODAY STATUS CARD */
-  todayCard: {
-    backgroundColor: '#FFFFFF',
-    marginHorizontal: 16,
-    marginTop: 8,
-    marginBottom: 6,
-    padding: 16,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    elevation: 2,
-  },
-  todayCardContent: {
-    flex: 1,
-    paddingRight: 10,
-  },
-  todayCardLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#94A3B8',
-    letterSpacing: 0.6,
-  },
-  todayStatusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-    gap: 6,
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  dotGreen: {
-    backgroundColor: '#10B981',
-  },
-  dotRed: {
-    backgroundColor: '#EF4444',
-  },
-  dotGray: {
-    backgroundColor: '#94A3B8',
-  },
-  todayStatusText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  todaySubText: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 3,
-  },
-  todayBadge: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  /* LIST CONTENT */
-  listContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 40,
-    paddingTop: 8,
   },
   dateHeaderContainer: {
     backgroundColor: '#EEF2FF',
@@ -2586,10 +3013,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
     marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
     elevation: 2,
   },
   cumulativeCardTitle: {

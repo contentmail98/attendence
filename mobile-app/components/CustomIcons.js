@@ -180,6 +180,66 @@ export function EmptyAttendanceGraphic({ size = 70 }) {
   );
 }
 
+/**
+ * 10. Back Arrow Icon
+ */
+export function BackArrowIcon({ size = 18, color = '#FFFFFF' }) {
+  return (
+    <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
+      <View style={{ width: size * 0.55, height: 2.2, backgroundColor: color, position: 'absolute', right: 2, borderRadius: 1 }} />
+      <View
+        style={{
+          width: size * 0.38,
+          height: size * 0.38,
+          borderLeftWidth: 2.2,
+          borderBottomWidth: 2.2,
+          borderColor: color,
+          transform: [{ rotate: '45deg' }],
+          position: 'absolute',
+          left: 2,
+          borderRadius: 1,
+        }}
+      />
+    </View>
+  );
+}
+
+/**
+ * 11. Home Icon for Dashboard Navigation
+ */
+export function HomeTabIcon({ size = 20, color = '#4F46E5' }) {
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View
+        style={{
+          width: 0,
+          height: 0,
+          borderLeftWidth: size * 0.45,
+          borderRightWidth: size * 0.45,
+          borderBottomWidth: size * 0.38,
+          borderLeftColor: 'transparent',
+          borderRightColor: 'transparent',
+          borderBottomColor: color,
+        }}
+      />
+      <View
+        style={{
+          width: size * 0.65,
+          height: size * 0.45,
+          backgroundColor: color,
+          marginTop: -1,
+          borderBottomLeftRadius: 2,
+          borderBottomRightRadius: 2,
+          alignItems: 'center',
+          justifyContent: 'flex-end',
+        }}
+      >
+        <View style={{ width: size * 0.22, height: size * 0.25, backgroundColor: '#FFFFFF', borderTopLeftRadius: 2, borderTopRightRadius: 2 }} />
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   // 1. Academy Emblem
   emblemContainer: {
